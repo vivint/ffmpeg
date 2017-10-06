@@ -654,6 +654,7 @@ static int rtsp_listen(AVFormatContext *s)
     av_log(s, AV_LOG_ERROR, "**** Path: %s", path);
     av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(path, "tls=1"));
     if (!strcmp(proto, "rtsps") || strstr(path, "tls=1") != NULL) {
+        av_log(s, AV_LOG_ERROR, "**** Using TLS");
         lower_proto  = "tls";
         default_port = RTSPS_DEFAULT_PORT;
     }
