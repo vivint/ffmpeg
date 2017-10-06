@@ -38,6 +38,7 @@ HEADERS = avcodec.h                                                     \
           version.h                                                     \
           videodsp.h                                                    \
           videotoolbox.h                                                \
+	  vlc.h								\
           vorbis_parser.h                                               \
           xvmc.h                                                        \
 
