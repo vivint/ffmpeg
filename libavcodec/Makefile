@@ -22,7 +22,6 @@ HEADERS = avcodec.h                                                     \
           mathops.h                                                     \
           me_cmp.h                                                      \
           mpegutils.h                                                   \
-          old_codec_ids.h                                               \
           parser.h                                                      \
           put_bits.h                                                    \
           qpeldsp.h                                                     \
