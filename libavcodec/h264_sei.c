@@ -254,7 +254,7 @@ static int decode_unregistered_user_data(H264SEIUnregistered *h, GetBitContext *
         return AVERROR(ENOMEM);
 
     for (i = 0; i < sizeIn32Bits; i++) {
-        uint32_t bytes = get_bits_long(&h->gb, bites32);
+        uint32_t bytes = get_bits_long(gb, bites32);
         h->sei_unregistered_user_data[i] = bytes;
     }
     
