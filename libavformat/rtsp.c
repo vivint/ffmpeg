@@ -1691,10 +1691,8 @@ redirect:
     av_url_split(proto, sizeof(proto), auth, sizeof(auth),
                  host, sizeof(host), &port, path, sizeof(path), s->filename);
 
-    av_log(s, AV_LOG_ERROR, "**** Host: %s", host);
-    av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(host, "vivintsky.com"));
     if (!strcmp(proto, "rtsps") || strstr(host, "vivintsky.com") != NULL) {
-        av_log(s, AV_LOG_ERROR, "**** Using TLS");
+        av_log(s, AV_LOG_ERROR, "Using TLS");
         lower_rtsp_proto         = "tls";
         default_port             = RTSPS_DEFAULT_PORT;
         rt->lower_transport_mask = 1 << RTSP_LOWER_TRANSPORT_TCP;
