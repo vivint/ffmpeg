@@ -651,9 +651,9 @@ static int rtsp_listen(AVFormatContext *s)
     ff_url_join(rt->control_uri, sizeof(rt->control_uri), proto, NULL, host,
                 port, "%s", path);
 
-    av_log(s, AV_LOG_ERROR, "**** Path: %s", path);
-    av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(path, "tls=1"));
-    if (!strcmp(proto, "rtsps") || strstr(path, "tls=1") != NULL) {
+    av_log(s, AV_LOG_ERROR, "**** Host: %s", host);
+    av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(host, "vivintsky.com"));
+    if (!strcmp(proto, "rtsps") || strstr(host, "vivintsky.com") != NULL) {
         av_log(s, AV_LOG_ERROR, "**** Using TLS");
         lower_proto  = "tls";
         default_port = RTSPS_DEFAULT_PORT;
