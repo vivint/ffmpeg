@@ -5,17 +5,35 @@ NAME = avcodec
 HEADERS = avcodec.h                                                     \
           avdct.h                                                       \
           avfft.h                                                       \
-          d3d11va.h                                                     \
+          cabac.h                                                       \
           dirac.h                                                       \
           dv_profile.h                                                  \
+          d3d11va.h                                                     \
           dxva2.h                                                       \
-          jni.h                                                         \
-          mediacodec.h                                                  \
+          error_resilience.h                                            \
+          get_bits.h                                                    \
+          h264.h 							\
+	  h264_sei.h                                                    \
+          h264chroma.h                                                  \
+          h264dsp.h                                                     \
+          h264pred.h                                                    \
+          h264qpel.h                                                    \
+          internal.h                                                    \
+          mathops.h                                                     \
+          me_cmp.h                                                      \
+          mpegutils.h                                                   \
+          old_codec_ids.h                                               \
+          parser.h                                                      \
+          put_bits.h                                                    \
+          qpeldsp.h                                                     \
           qsv.h                                                         \
+          rectangle.h                                                   \
+          thread.h                                                      \
           vaapi.h                                                       \
           vda.h                                                         \
           vdpau.h                                                       \
           version.h                                                     \
+          videodsp.h                                                    \
           videotoolbox.h                                                \
           vorbis_parser.h                                               \
           xvmc.h                                                        \

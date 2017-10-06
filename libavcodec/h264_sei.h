@@ -97,6 +97,7 @@ typedef struct H264SEIA53Caption {
 
 typedef struct H264SEIUnregistered {
     int x264_build;
+    uint32_t sei_unregistered_user_data[16];
 } H264SEIUnregistered;
 
 typedef struct H264SEIRecoveryPoint {

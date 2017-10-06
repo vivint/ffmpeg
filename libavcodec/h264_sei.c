@@ -237,6 +237,12 @@ static int decode_registered_user_data(H264SEIContext *h, GetBitContext *gb,
 static int decode_unregistered_user_data(H264SEIUnregistered *h, GetBitContext *gb,
                                          void *logctx, int size)
 {
+    int terminatorSize = 1;
+    int bytesPer32Bits = 4;
+    int bites32 = 32;
+    int sizeIn32Bits = size / bytesPer32Bits;
+    
+
     uint8_t *user_data;
     int e, build, i;
 
@@ -247,6 +253,11 @@ static int decode_unregistered_user_data(H264SEIUnregistered *h, GetBitContext *
     if (!user_data)
         return AVERROR(ENOMEM);
 
+    for (i = 0; i < sizeIn32Bits; i++) {
+        uint32_t bytes = get_bits_long(&h->gb, bites32);
+        h->sei_unregistered_user_data[i] = bytes;
+    }
+    
     for (i = 0; i < size + 16; i++)
         user_data[i] = get_bits(gb, 8);
 

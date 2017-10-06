@@ -4,10 +4,17 @@ NAME = avformat
 
 HEADERS = avformat.h                                                    \
           avio.h                                                        \
-          version.h                                                     \
-          avc.h                                                         \
+          http.h                                                        \
+          httpauth.h                                                    \
+          network.h                                                     \
+          os_support.h                                                  \
+          rtp.h                                                         \
+          rtpdec.h                                                      \
+          rtsp.h                                                        \
+          rtspcodes.h                                                   \
+          srtp.h                                                        \
           url.h                                                         \
-          internal.h                                                    \
+          version.h                                                     \
 
 OBJS = allformats.o         \
        avio.o               \
