@@ -14,11 +14,14 @@ HEADERS = avcodec.h                                                     \
           get_bits.h                                                    \
           h264.h 							\
 	  h264_sei.h                                                    \
+	  h264_parse.h							\
+	  h264_ps.h							\
 	  h264dec.h                                                     \
           h264chroma.h                                                  \
           h264dsp.h                                                     \
           h264pred.h                                                    \
           h264qpel.h                                                    \
+	  h2645_parse.h							\
           internal.h                                                    \
           mathops.h                                                     \
           me_cmp.h                                                      \
