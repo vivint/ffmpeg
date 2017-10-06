@@ -651,10 +651,12 @@ static int rtsp_listen(AVFormatContext *s)
     ff_url_join(rt->control_uri, sizeof(rt->control_uri), proto, NULL, host,
                 port, "%s", path);
 
-//    if (!strcmp(proto, "rtsps")) {
+    av_log(s, AV_LOG_ERROR, "**** Path: %s", path);
+    av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(path, "tls=1"));
+    if (!strcmp(proto, "rtsps") || strstr(path, "tls=1") != NULL) {
         lower_proto  = "tls";
         default_port = RTSPS_DEFAULT_PORT;
-//    }
+    }
 
     if (port < 0)
         port = default_port;

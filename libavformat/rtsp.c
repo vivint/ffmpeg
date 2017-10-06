@@ -1691,11 +1691,13 @@ redirect:
     av_url_split(proto, sizeof(proto), auth, sizeof(auth),
                  host, sizeof(host), &port, path, sizeof(path), s->filename);
 
-//    if (!strcmp(proto, "rtsps")) {
+    av_log(s, AV_LOG_ERROR, "**** Path: %s", path);
+    av_log(s, AV_LOG_ERROR, "**** Strstr: %s", strstr(path, "tls=1"));
+    if (!strcmp(proto, "rtsps") || strstr(path, "tls=1") != NULL) {
         lower_rtsp_proto         = "tls";
         default_port             = RTSPS_DEFAULT_PORT;
         rt->lower_transport_mask = 1 << RTSP_LOWER_TRANSPORT_TCP;
-//    }
+    }
 
     if (*auth) {
         av_strlcpy(rt->auth, auth, sizeof(rt->auth));
