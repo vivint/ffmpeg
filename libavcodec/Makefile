@@ -14,6 +14,7 @@ HEADERS = avcodec.h                                                     \
           get_bits.h                                                    \
           h264.h 							\
 	  h264_sei.h                                                    \
+	  h264dec.h                                                     \
           h264chroma.h                                                  \
           h264dsp.h                                                     \
           h264pred.h                                                    \
