@@ -1836,40 +1836,40 @@ redirect:
 
     /* request options supported by the server; this also detects server
      * type */
-    for (rt->server_type = RTSP_SERVER_RTP;;) {
-        cmd[0] = 0;
-        if (rt->server_type == RTSP_SERVER_REAL)
-            av_strlcat(cmd,
-                       /*
-                        * The following entries are required for proper
-                        * streaming from a Realmedia server. They are
-                        * interdependent in some way although we currently
-                        * don't quite understand how. Values were copied
-                        * from mplayer SVN r23589.
-                        *   ClientChallenge is a 16-byte ID in hex
-                        *   CompanyID is a 16-byte ID in base64
-                        */
-                       "ClientChallenge: 9e26d33f2984236010ef6253fb1887f7\r\n"
-                       "PlayerStarttime: [28/03/2003:22:50:23 00:00]\r\n"
-                       "CompanyID: KnKV4M4I/B2FjJ1TToLycw==\r\n"
-                       "GUID: 00000000-0000-0000-0000-000000000000\r\n",
-                       sizeof(cmd));
-        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
-        if (reply->status_code != RTSP_STATUS_OK) {
-            err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
-            goto fail;
-        }
-
-        /* detect server type if not standard-compliant RTP */
-        if (rt->server_type != RTSP_SERVER_REAL && reply->real_challenge[0]) {
-            rt->server_type = RTSP_SERVER_REAL;
-            continue;
-        } else if (!av_strncasecmp(reply->server, "WMServer/", 9)) {
-            rt->server_type = RTSP_SERVER_WMS;
-        } else if (rt->server_type == RTSP_SERVER_REAL)
-            strcpy(real_challenge, reply->real_challenge);
-        break;
-    }
+//    for (rt->server_type = RTSP_SERVER_RTP;;) {
+//        cmd[0] = 0;
+//        if (rt->server_type == RTSP_SERVER_REAL)
+//            av_strlcat(cmd,
+//                       /*
+//                        * The following entries are required for proper
+//                        * streaming from a Realmedia server. They are
+//                        * interdependent in some way although we currently
+//                        * don't quite understand how. Values were copied
+//                        * from mplayer SVN r23589.
+//                        *   ClientChallenge is a 16-byte ID in hex
+//                        *   CompanyID is a 16-byte ID in base64
+//                        */
+//                       "ClientChallenge: 9e26d33f2984236010ef6253fb1887f7\r\n"
+//                       "PlayerStarttime: [28/03/2003:22:50:23 00:00]\r\n"
+//                       "CompanyID: KnKV4M4I/B2FjJ1TToLycw==\r\n"
+//                       "GUID: 00000000-0000-0000-0000-000000000000\r\n",
+//                       sizeof(cmd));
+//        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
+//        if (reply->status_code != RTSP_STATUS_OK) {
+//            err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
+//            goto fail;
+//        }
+//
+//        /* detect server type if not standard-compliant RTP */
+//        if (rt->server_type != RTSP_SERVER_REAL && reply->real_challenge[0]) {
+//            rt->server_type = RTSP_SERVER_REAL;
+//            continue;
+//        } else if (!av_strncasecmp(reply->server, "WMServer/", 9)) {
+//            rt->server_type = RTSP_SERVER_WMS;
+//        } else if (rt->server_type == RTSP_SERVER_REAL)
+//            strcpy(real_challenge, reply->real_challenge);
+//        break;
+//    }
 
     if (CONFIG_RTSP_DEMUXER && s->iformat)
         err = ff_rtsp_setup_input_streams(s, reply);
