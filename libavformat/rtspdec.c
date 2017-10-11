@@ -910,13 +910,13 @@ retry:
         /* send dummy request to keep TCP connection alive */
         if ((av_gettime_relative() - rt->last_cmd_time) / 1000000 >= rt->timeout / 2 ||
             rt->auth_state.stale) {
-            if (rt->server_type == RTSP_SERVER_WMS ||
-                (rt->server_type != RTSP_SERVER_REAL &&
-                 rt->get_parameter_supported)) {
+//            if (rt->server_type == RTSP_SERVER_WMS ||
+//                (rt->server_type != RTSP_SERVER_REAL &&
+//                 rt->get_parameter_supported)) {
                 ff_rtsp_send_cmd_async(s, "GET_PARAMETER", rt->control_uri, NULL);
-            } else {
-                ff_rtsp_send_cmd_async(s, "OPTIONS", rt->control_uri, NULL);
-            }
+//            } else {
+//                ff_rtsp_send_cmd_async(s, "OPTIONS", rt->control_uri, NULL);
+//            }
             /* The stale flag should be reset when creating the auth response in
              * ff_rtsp_send_cmd_async, but reset it here just in case we never
              * called the auth code (if we didn't have any credentials set). */
