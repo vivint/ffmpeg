@@ -1854,9 +1854,9 @@ redirect:
                        "CompanyID: KnKV4M4I/B2FjJ1TToLycw==\r\n"
                        "GUID: 00000000-0000-0000-0000-000000000000\r\n",
                        sizeof(cmd));
-        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
-//        reply->status_code = RTSP_STATUS_OK;
-//        rt->server_type = RTSP_SERVER_RTP;
+//        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
+        reply->status_code = RTSP_STATUS_OK;
+        rt->server_type = RTSP_SERVER_RTP;
         if (reply->status_code != RTSP_STATUS_OK) {
             err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
             goto fail;
