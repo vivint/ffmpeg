@@ -1385,9 +1385,9 @@ retry:
                                                     send_content_length)))
             return ret;
     } else {
-        av_log(s, AV_LOG_ERROR, "Skipping OPTIONS call",
-            reply->status_code = 200;
-            rt->get_parameter_supported = 1;
+        av_log(s, AV_LOG_ERROR, "Skipping OPTIONS call");
+        reply->status_code = 200;
+        rt->get_parameter_supported = 1;
     }
     if ((ret = ff_rtsp_read_reply(s, reply, content_ptr, 0, method) ) < 0)
         return ret;
