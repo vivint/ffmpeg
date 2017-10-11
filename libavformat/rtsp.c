@@ -1378,17 +1378,11 @@ int ff_rtsp_send_cmd_with_content(AVFormatContext *s,
 
 retry:
     cur_auth_type = rt->auth_state.auth_type;
-    // Skip making OPTIONS call
-    if (!strcmp(method, "OPTIONS")) {
-        if ((ret = rtsp_send_cmd_with_content_async(s, method, url, header,
-                                                    send_content,
-                                                    send_content_length)))
-            return ret;
-    } else {
-        av_log(s, AV_LOG_ERROR, "Skipping OPTIONS call");
-        reply->status_code = 200;
-        rt->get_parameter_supported = 1;
-    }
+    if ((ret = rtsp_send_cmd_with_content_async(s, method, url, header,
+                                                send_content,
+                                                send_content_length)))
+        return ret;
+
     if ((ret = ff_rtsp_read_reply(s, reply, content_ptr, 0, method) ) < 0)
         return ret;
     attempts++;
@@ -1860,7 +1854,9 @@ redirect:
                        "CompanyID: KnKV4M4I/B2FjJ1TToLycw==\r\n"
                        "GUID: 00000000-0000-0000-0000-000000000000\r\n",
                        sizeof(cmd));
-        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
+//        ff_rtsp_send_cmd(s, "OPTIONS", rt->control_uri, cmd, reply, NULL);
+        reply->status_code = RTSP_STATUS_OK;
+        rt->server_type = RTSP_SERVER_RTP;
         if (reply->status_code != RTSP_STATUS_OK) {
             err = ff_rtsp_averror(reply->status_code, AVERROR_INVALIDDATA);
             goto fail;
