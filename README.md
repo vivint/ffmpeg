@@ -1,3 +1,7 @@
+## Vivint's Modifications:
+1. We've made some specific changes to publicly expose the unregistered user data SEI (H.264) so the consumer can manually decode it
+2. Publically expose an RTSP send command method
+
 FFmpeg README
 =============
 
