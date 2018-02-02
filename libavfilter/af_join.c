@@ -78,13 +78,11 @@ static const AVOption join_options[] = {
 
 AVFILTER_DEFINE_CLASS(join);
 
-static int try_push_frame(AVFilterContext *ctx);
-
 static int filter_frame(AVFilterLink *link, AVFrame *frame)
 {
     AVFilterContext *ctx = link->dst;
     JoinContext       *s = ctx->priv;
-    int i, j;
+    int i;
 
     for (i = 0; i < ctx->nb_inputs; i++)
         if (link == ctx->inputs[i])
@@ -93,17 +91,7 @@ static int filter_frame(AVFilterLink *link, AVFrame *frame)
     av_assert0(!s->input_frames[i]);
     s->input_frames[i] = frame;
 
-    /* request the same number of samples on all inputs */
-    /* FIXME that means a frame arriving asynchronously on a different input
-       will not have the requested number of samples */
-    if (i == 0) {
-        int nb_samples = s->input_frames[0]->nb_samples;
-
-        for (j = 1; !i && j < ctx->nb_inputs; j++)
-            ctx->inputs[j]->request_samples = nb_samples;
-    }
-
-    return try_push_frame(ctx);
+    return 0;
 }
 
 static int parse_maps(AVFilterContext *ctx)
@@ -257,21 +245,20 @@ static int join_query_formats(AVFilterContext *ctx)
 {
     JoinContext *s = ctx->priv;
     AVFilterChannelLayouts *layouts = NULL;
-    int i, ret;
+    int i;
 
-    if ((ret = ff_add_channel_layout(&layouts, s->channel_layout)) < 0 ||
-        (ret = ff_channel_layouts_ref(layouts, &ctx->outputs[0]->in_channel_layouts)) < 0)
-        return ret;
+    ff_add_channel_layout(&layouts, s->channel_layout);
+    ff_channel_layouts_ref(layouts, &ctx->outputs[0]->in_channel_layouts);
 
     for (i = 0; i < ctx->nb_inputs; i++) {
         layouts = ff_all_channel_layouts();
-        if ((ret = ff_channel_layouts_ref(layouts, &ctx->inputs[i]->out_channel_layouts)) < 0)
-            return ret;
+        if (!layouts)
+            return AVERROR(ENOMEM);
+        ff_channel_layouts_ref(layouts, &ctx->inputs[i]->out_channel_layouts);
     }
 
-    if ((ret = ff_set_common_formats(ctx, ff_planar_sample_fmts())) < 0 ||
-        (ret = ff_set_common_samplerates(ctx, ff_all_samplerates())) < 0)
-        return ret;
+    ff_set_common_formats    (ctx, ff_planar_sample_fmts());
+    ff_set_common_samplerates(ctx, ff_all_samplerates());
 
     return 0;
 }
@@ -399,31 +386,27 @@ static int join_request_frame(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
     JoinContext *s       = ctx->priv;
-    int i;
+    AVFrame *frame;
+    int linesize   = INT_MAX;
+    int nb_samples = 0;
+    int nb_buffers = 0;
+    int i, j, ret;
 
     /* get a frame on each input */
     for (i = 0; i < ctx->nb_inputs; i++) {
         AVFilterLink *inlink = ctx->inputs[i];
-        if (!s->input_frames[i])
-            return ff_request_frame(inlink);
-    }
-    return 0;
-}
 
-static int try_push_frame(AVFilterContext *ctx)
-{
-    AVFilterLink *outlink = ctx->outputs[0];
-    JoinContext *s       = ctx->priv;
-    AVFrame *frame;
-    int linesize   = INT_MAX;
-    int nb_samples = INT_MAX;
-    int nb_buffers = 0;
-    int i, j, ret;
+        if (!s->input_frames[i] &&
+            (ret = ff_request_frame(inlink)) < 0)
+            return ret;
 
-    for (i = 0; i < ctx->nb_inputs; i++) {
-        if (!s->input_frames[i])
-            return 0;
-        nb_samples = FFMIN(nb_samples, s->input_frames[i]->nb_samples);
+        /* request the same number of samples on all inputs */
+        if (i == 0) {
+            nb_samples = s->input_frames[0]->nb_samples;
+
+            for (j = 1; !i && j < ctx->nb_inputs; j++)
+                ctx->inputs[j]->request_samples = nb_samples;
+        }
     }
 
     /* setup the output frame */

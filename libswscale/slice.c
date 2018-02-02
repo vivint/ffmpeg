@@ -39,7 +39,7 @@ static void free_lines(SwsSlice *s)
 }
 
 /*
- slice lines contains extra bytes for vectorial code thus @size
+ slice lines contains extra bytes for vetorial code thus @size
  is the allocated memory size and @width is the number of pixels
 */
 static int alloc_lines(SwsSlice *s, int size, int width)
@@ -144,45 +144,43 @@ int ff_rotate_slice(SwsSlice *s, int lum, int chr)
     return 0;
 }
 
-int ff_init_slice_from_src(SwsSlice * s, uint8_t *src[4], int stride[4], int srcW, int lumY, int lumH, int chrY, int chrH, int relative)
+int ff_init_slice_from_src(SwsSlice * s, uint8_t *src[4], int stride[4], int srcW, int lumY, int lumH, int chrY, int chrH)
 {
     int i = 0;
 
     const int start[4] = {lumY,
-                          chrY,
-                          chrY,
-                          lumY};
+                    chrY,
+                    chrY,
+                    lumY};
 
     const int end[4] = {lumY +lumH,
                         chrY + chrH,
                         chrY + chrH,
                         lumY + lumH};
 
-    uint8_t *const src_[4] = {src[0] + (relative ? 0 : start[0]) * stride[0],
-                              src[1] + (relative ? 0 : start[1]) * stride[1],
-                              src[2] + (relative ? 0 : start[2]) * stride[2],
-                              src[3] + (relative ? 0 : start[3]) * stride[3]};
-
     s->width = srcW;
 
     for (i = 0; i < 4; ++i) {
         int j;
-        int first = s->plane[i].sliceY;
-        int n = s->plane[i].available_lines;
-        int lines = end[i] - start[i];
-        int tot_lines = end[i] - first;
+        int lines = end[i];
+        lines = s->plane[i].available_lines < lines ? s->plane[i].available_lines : lines;
 
-        if (start[i] >= first && n >= tot_lines) {
-            s->plane[i].sliceH = FFMAX(tot_lines, s->plane[i].sliceH);
-            for (j = 0; j < lines; j+= 1)
-                s->plane[i].line[start[i] - first + j] = src_[i] +  j * stride[i];
+        if (end[i] > s->plane[i].sliceY+s->plane[i].sliceH) {
+            if (start[i] <= s->plane[i].sliceY+1)
+                s->plane[i].sliceY = FFMIN(start[i], s->plane[i].sliceY);
+            else
+                s->plane[i].sliceY = start[i];
+            s->plane[i].sliceH = end[i] - s->plane[i].sliceY;
         } else {
+            if (end[i] >= s->plane[i].sliceY)
+                s->plane[i].sliceH = s->plane[i].sliceY + s->plane[i].sliceH - start[i];
+            else
+                s->plane[i].sliceH = end[i] - start[i];
             s->plane[i].sliceY = start[i];
-            lines = lines > n ? n : lines;
-            s->plane[i].sliceH = lines;
-            for (j = 0; j < lines; j+= 1)
-                s->plane[i].line[j] = src_[i] +  j * stride[i];
         }
+
+        for (j = start[i]; j < lines; j+= 1)
+            s->plane[i].line[j] = src[i] + (start[i] + j) * stride[i];
 
     }
 
@@ -210,42 +208,6 @@ static void fill_ones(SwsSlice *s, int n, int is16bit)
     }
 }
 
-/*
- Calculates the minimum ring buffer size, it should be able to store vFilterSize
- more n lines where n is the max difference between each adjacent slice which
- outputs a line.
- The n lines are needed only when there is not enough src lines to output a single
- dst line, then we should buffer these lines to process them on the next call to scale.
-*/
-static void get_min_buffer_size(SwsContext *c, int *out_lum_size, int *out_chr_size)
-{
-    int lumY;
-    int dstH = c->dstH;
-    int chrDstH = c->chrDstH;
-    int *lumFilterPos = c->vLumFilterPos;
-    int *chrFilterPos = c->vChrFilterPos;
-    int lumFilterSize = c->vLumFilterSize;
-    int chrFilterSize = c->vChrFilterSize;
-    int chrSubSample = c->chrSrcVSubSample;
-
-    *out_lum_size = lumFilterSize;
-    *out_chr_size = chrFilterSize;
-
-    for (lumY = 0; lumY < dstH; lumY++) {
-        int chrY      = (int64_t)lumY * chrDstH / dstH;
-        int nextSlice = FFMAX(lumFilterPos[lumY] + lumFilterSize - 1,
-                              ((chrFilterPos[chrY] + chrFilterSize - 1)
-                               << chrSubSample));
-
-        nextSlice >>= chrSubSample;
-        nextSlice <<= chrSubSample;
-        (*out_lum_size) = FFMAX((*out_lum_size), nextSlice - lumFilterPos[lumY]);
-        (*out_chr_size) = FFMAX((*out_chr_size), (nextSlice >> chrSubSample) - chrFilterPos[chrY]);
-    }
-}
-
-
-
 int ff_init_filters(SwsContext * c)
 {
     int i;
@@ -261,13 +223,6 @@ int ff_init_filters(SwsContext * c)
 
     uint32_t * pal = usePal(c->srcFormat) ? c->pal_yuv : (uint32_t*)c->input_rgb2yuv_table;
     int res = 0;
-
-    int lumBufSize;
-    int chrBufSize;
-
-    get_min_buffer_size(c, &lumBufSize, &chrBufSize);
-    lumBufSize = FFMAX(lumBufSize, c->vLumFilterSize + MAX_LINES_AHEAD);
-    chrBufSize = FFMAX(chrBufSize, c->vChrFilterSize + MAX_LINES_AHEAD);
 
     if (c->dstBpc == 16)
         dst_stride <<= 1;
@@ -291,13 +246,13 @@ int ff_init_filters(SwsContext * c)
     res = alloc_slice(&c->slice[0], c->srcFormat, c->srcH, c->chrSrcH, c->chrSrcHSubSample, c->chrSrcVSubSample, 0);
     if (res < 0) goto cleanup;
     for (i = 1; i < c->numSlice-2; ++i) {
-        res = alloc_slice(&c->slice[i], c->srcFormat, lumBufSize, chrBufSize, c->chrSrcHSubSample, c->chrSrcVSubSample, 0);
+        res = alloc_slice(&c->slice[i], c->srcFormat, c->vLumFilterSize + MAX_LINES_AHEAD, c->vChrFilterSize + MAX_LINES_AHEAD, c->chrSrcHSubSample, c->chrSrcVSubSample, 0);
         if (res < 0) goto cleanup;
         res = alloc_lines(&c->slice[i], FFALIGN(c->srcW*2+78, 16), c->srcW);
         if (res < 0) goto cleanup;
     }
     // horizontal scaler output
-    res = alloc_slice(&c->slice[i], c->srcFormat, lumBufSize, chrBufSize, c->chrDstHSubSample, c->chrDstVSubSample, 1);
+    res = alloc_slice(&c->slice[i], c->srcFormat, c->vLumFilterSize + MAX_LINES_AHEAD, c->vChrFilterSize + MAX_LINES_AHEAD, c->chrDstHSubSample, c->chrDstVSubSample, 1);
     if (res < 0) goto cleanup;
     res = alloc_lines(&c->slice[i], dst_stride, c->dstW);
     if (res < 0) goto cleanup;
@@ -322,7 +277,7 @@ int ff_init_filters(SwsContext * c)
     if (need_lum_conv) {
         res = ff_init_desc_fmt_convert(&c->desc[index], &c->slice[srcIdx], &c->slice[dstIdx], pal);
         if (res < 0) goto cleanup;
-        c->desc[index].alpha = c->needAlpha;
+        c->desc[index].alpha = c->alpPixBuf != 0;
         ++index;
         srcIdx = dstIdx;
     }
@@ -331,7 +286,7 @@ int ff_init_filters(SwsContext * c)
     dstIdx = FFMAX(num_ydesc, num_cdesc);
     res = ff_init_desc_hscale(&c->desc[index], &c->slice[srcIdx], &c->slice[dstIdx], c->hLumFilter, c->hLumFilterPos, c->hLumFilterSize, c->lumXInc);
     if (res < 0) goto cleanup;
-    c->desc[index].alpha = c->needAlpha;
+    c->desc[index].alpha = c->alpPixBuf != 0;
 
 
     ++index;

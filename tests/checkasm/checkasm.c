@@ -27,7 +27,6 @@
 #include "checkasm.h"
 #include "libavutil/common.h"
 #include "libavutil/cpu.h"
-#include "libavutil/intfloat.h"
 #include "libavutil/random_seed.h"
 
 #if HAVE_IO_H
@@ -53,81 +52,19 @@
 #define isatty(fd) 1
 #endif
 
-#if ARCH_ARM && HAVE_ARMV5TE_EXTERNAL
-#include "libavutil/arm/cpu.h"
-
-void (*checkasm_checked_call)(void *func, int dummy, ...) = checkasm_checked_call_novfp;
-#endif
-
 /* List of tests to invoke */
 static const struct {
     const char *name;
     void (*func)(void);
 } tests[] = {
-#if CONFIG_AVCODEC
-    #if CONFIG_ALAC_DECODER
-        { "alacdsp", checkasm_check_alacdsp },
-    #endif
-    #if CONFIG_AUDIODSP
-        { "audiodsp", checkasm_check_audiodsp },
-    #endif
-    #if CONFIG_BLOCKDSP
-        { "blockdsp", checkasm_check_blockdsp },
-    #endif
-    #if CONFIG_BSWAPDSP
-        { "bswapdsp", checkasm_check_bswapdsp },
-    #endif
-    #if CONFIG_DCA_DECODER
-        { "synth_filter", checkasm_check_synth_filter },
-    #endif
-    #if CONFIG_FLACDSP
-        { "flacdsp", checkasm_check_flacdsp },
-    #endif
-    #if CONFIG_FMTCONVERT
-        { "fmtconvert", checkasm_check_fmtconvert },
-    #endif
-    #if CONFIG_H264DSP
-        { "h264dsp", checkasm_check_h264dsp },
-    #endif
-    #if CONFIG_H264PRED
-        { "h264pred", checkasm_check_h264pred },
-    #endif
-    #if CONFIG_H264QPEL
-        { "h264qpel", checkasm_check_h264qpel },
-    #endif
-    #if CONFIG_HEVC_DECODER
-        { "hevc_add_res", checkasm_check_hevc_add_res },
-        { "hevc_idct", checkasm_check_hevc_idct },
-    #endif
-    #if CONFIG_JPEG2000_DECODER
-        { "jpeg2000dsp", checkasm_check_jpeg2000dsp },
-    #endif
-    #if CONFIG_HUFFYUVDSP
-        { "llviddsp", checkasm_check_llviddsp },
-    #endif
-    #if CONFIG_PIXBLOCKDSP
-        { "pixblockdsp", checkasm_check_pixblockdsp },
-    #endif
-    #if CONFIG_V210_ENCODER
-        { "v210enc", checkasm_check_v210enc },
-    #endif
-    #if CONFIG_VP8DSP
-        { "vp8dsp", checkasm_check_vp8dsp },
-    #endif
-    #if CONFIG_VP9_DECODER
-        { "vp9dsp", checkasm_check_vp9dsp },
-    #endif
-    #if CONFIG_VIDEODSP
-        { "videodsp", checkasm_check_videodsp },
-    #endif
+#if CONFIG_BSWAPDSP
+    { "bswapdsp", checkasm_check_bswapdsp },
 #endif
-#if CONFIG_AVFILTER
-    #if CONFIG_BLEND_FILTER
-        { "vf_blend", checkasm_check_blend },
-    #endif
-    #if CONFIG_COLORSPACE_FILTER
-        { "vf_colorspace", checkasm_check_colorspace },
-    #endif
+#if CONFIG_H264PRED
+    { "h264pred", checkasm_check_h264pred },
+#endif
+#if CONFIG_H264QPEL
+    { "h264qpel", checkasm_check_h264qpel },
 #endif
     { NULL }
 };
@@ -146,7 +83,6 @@ static const struct {
     { "ARMV6",    "armv6",    AV_CPU_FLAG_ARMV6 },
     { "ARMV6T2",  "armv6t2",  AV_CPU_FLAG_ARMV6T2 },
     { "VFP",      "vfp",      AV_CPU_FLAG_VFP },
-    { "VFP_VM",   "vfp_vm",   AV_CPU_FLAG_VFP_VM },
     { "VFPV3",    "vfp3",     AV_CPU_FLAG_VFPV3 },
     { "NEON",     "neon",     AV_CPU_FLAG_NEON },
 #elif ARCH_PPC
@@ -164,7 +100,6 @@ static const struct {
     { "SSSE3",    "ssse3",    AV_CPU_FLAG_SSSE3|AV_CPU_FLAG_ATOM },
     { "SSE4.1",   "sse4",     AV_CPU_FLAG_SSE4 },
     { "SSE4.2",   "sse42",    AV_CPU_FLAG_SSE42 },
-    { "AES-NI",   "aesni",    AV_CPU_FLAG_AESNI },
     { "AVX",      "avx",      AV_CPU_FLAG_AVX },
     { "XOP",      "xop",      AV_CPU_FLAG_XOP },
     { "FMA3",     "fma3",     AV_CPU_FLAG_FMA3 },
@@ -187,7 +122,6 @@ typedef struct CheckasmFuncVersion {
 typedef struct CheckasmFunc {
     struct CheckasmFunc *child[2];
     CheckasmFuncVersion versions;
-    uint8_t color; /* 0 = red, 1 = black */
     char name[1];
 } CheckasmFunc;
 
@@ -204,83 +138,10 @@ static struct {
     int nop_time;
     int cpu_flag;
     const char *cpu_flag_name;
-    const char *test_name;
 } state;
 
 /* PRNG state */
 AVLFG checkasm_lfg;
-
-/* float compare support code */
-static int is_negative(union av_intfloat32 u)
-{
-    return u.i >> 31;
-}
-
-int float_near_ulp(float a, float b, unsigned max_ulp)
-{
-    union av_intfloat32 x, y;
-
-    x.f = a;
-    y.f = b;
-
-    if (is_negative(x) != is_negative(y)) {
-        // handle -0.0 == +0.0
-        return a == b;
-    }
-
-    if (llabs((int64_t)x.i - y.i) <= max_ulp)
-        return 1;
-
-    return 0;
-}
-
-int float_near_ulp_array(const float *a, const float *b, unsigned max_ulp,
-                         unsigned len)
-{
-    unsigned i;
-
-    for (i = 0; i < len; i++) {
-        if (!float_near_ulp(a[i], b[i], max_ulp))
-            return 0;
-    }
-    return 1;
-}
-
-int float_near_abs_eps(float a, float b, float eps)
-{
-    float abs_diff = fabsf(a - b);
-
-    return abs_diff < eps;
-}
-
-int float_near_abs_eps_array(const float *a, const float *b, float eps,
-                         unsigned len)
-{
-    unsigned i;
-
-    for (i = 0; i < len; i++) {
-        if (!float_near_abs_eps(a[i], b[i], eps))
-            return 0;
-    }
-    return 1;
-}
-
-int float_near_abs_eps_ulp(float a, float b, float eps, unsigned max_ulp)
-{
-    return float_near_ulp(a, b, max_ulp) || float_near_abs_eps(a, b, eps);
-}
-
-int float_near_abs_eps_array_ulp(const float *a, const float *b, float eps,
-                         unsigned max_ulp, unsigned len)
-{
-    unsigned i;
-
-    for (i = 0; i < len; i++) {
-        if (!float_near_abs_eps_ulp(a[i], b[i], eps, max_ulp))
-            return 0;
-    }
-    return 1;
-}
 
 /* Print colored text to stderr if the terminal supports it */
 static void color_printf(int color, const char *fmt, ...)
@@ -415,68 +276,31 @@ static void print_benchs(CheckasmFunc *f)
 /* ASCIIbetical sort except preserving natural order for numbers */
 static int cmp_func_names(const char *a, const char *b)
 {
-    const char *start = a;
     int ascii_diff, digit_diff;
 
-    for (; !(ascii_diff = *(const unsigned char*)a - *(const unsigned char*)b) && *a; a++, b++);
+    for (; !(ascii_diff = *a - *b) && *a; a++, b++);
     for (; av_isdigit(*a) && av_isdigit(*b); a++, b++);
 
-    if (a > start && av_isdigit(a[-1]) && (digit_diff = av_isdigit(*a) - av_isdigit(*b)))
-        return digit_diff;
-
-    return ascii_diff;
-}
-
-/* Perform a tree rotation in the specified direction and return the new root */
-static CheckasmFunc *rotate_tree(CheckasmFunc *f, int dir)
-{
-    CheckasmFunc *r = f->child[dir^1];
-    f->child[dir^1] = r->child[dir];
-    r->child[dir] = f;
-    r->color = f->color;
-    f->color = 0;
-    return r;
-}
-
-#define is_red(f) ((f) && !(f)->color)
-
-/* Balance a left-leaning red-black tree at the specified node */
-static void balance_tree(CheckasmFunc **root)
-{
-    CheckasmFunc *f = *root;
-
-    if (is_red(f->child[0]) && is_red(f->child[1])) {
-        f->color ^= 1;
-        f->child[0]->color = f->child[1]->color = 1;
-    }
-
-    if (!is_red(f->child[0]) && is_red(f->child[1]))
-        *root = rotate_tree(f, 0); /* Rotate left */
-    else if (is_red(f->child[0]) && is_red(f->child[0]->child[0]))
-        *root = rotate_tree(f, 1); /* Rotate right */
+    return (digit_diff = av_isdigit(*a) - av_isdigit(*b)) ? digit_diff : ascii_diff;
 }
 
 /* Get a node with the specified name, creating it if it doesn't exist */
-static CheckasmFunc *get_func(CheckasmFunc **root, const char *name)
+static CheckasmFunc *get_func(const char *name, int length)
 {
-    CheckasmFunc *f = *root;
+    CheckasmFunc *f, **f_ptr = &state.funcs;
 
-    if (f) {
-        /* Search the tree for a matching node */
+    /* Search the tree for a matching node */
+    while ((f = *f_ptr)) {
         int cmp = cmp_func_names(name, f->name);
-        if (cmp) {
-            f = get_func(&f->child[cmp > 0], name);
+        if (!cmp)
+            return f;
 
-            /* Rebalance the tree on the way up if a new node was inserted */
-            if (!f->versions.func)
-                balance_tree(root);
-        }
-    } else {
-        /* Allocate and insert a new node into the tree */
-        int name_length = strlen(name);
-        f = *root = checkasm_malloc(sizeof(CheckasmFunc) + name_length);
-        memcpy(f->name, name, name_length + 1);
+        f_ptr = &f->child[(cmp > 0)];
     }
+
+    /* Allocate and insert a new node into the tree */
+    f = *f_ptr = checkasm_malloc(sizeof(CheckasmFunc) + length);
+    memcpy(f->name, name, length+1);
 
     return f;
 }
@@ -487,17 +311,14 @@ static void check_cpu_flag(const char *name, int flag)
     int old_cpu_flag = state.cpu_flag;
 
     flag |= old_cpu_flag;
-    av_force_cpu_flags(-1);
-    state.cpu_flag = flag & av_get_cpu_flags();
-    av_force_cpu_flags(state.cpu_flag);
+    av_set_cpu_flags_mask(flag);
+    state.cpu_flag = av_get_cpu_flags();
 
     if (!flag || state.cpu_flag != old_cpu_flag) {
         int i;
 
         state.cpu_flag_name = name;
         for (i = 0; tests[i].func; i++) {
-            if (state.test_name && strcmp(tests[i].name, state.test_name))
-                continue;
             state.current_test_name = tests[i].name;
             tests[i].func();
         }
@@ -515,40 +336,29 @@ static void print_cpu_name(void)
 
 int main(int argc, char *argv[])
 {
-    unsigned int seed = av_get_random_seed();
-    int i, ret = 0;
-
-#if ARCH_ARM && HAVE_ARMV5TE_EXTERNAL
-    if (have_vfp(av_get_cpu_flags()) || have_neon(av_get_cpu_flags()))
-        checkasm_checked_call = checkasm_checked_call_vfp;
-#endif
+    int i, seed, ret = 0;
 
     if (!tests[0].func || !cpus[0].flag) {
         fprintf(stderr, "checkasm: no tests to perform\n");
         return 0;
     }
 
-    while (argc > 1) {
-        if (!strncmp(argv[1], "--bench", 7)) {
+    if (argc > 1 && !strncmp(argv[1], "--bench", 7)) {
 #ifndef AV_READ_TIME
-            fprintf(stderr, "checkasm: --bench is not supported on your system\n");
-            return 1;
+        fprintf(stderr, "checkasm: --bench is not supported on your system\n");
+        return 1;
 #endif
-            if (argv[1][7] == '=') {
-                state.bench_pattern = argv[1] + 8;
-                state.bench_pattern_len = strlen(state.bench_pattern);
-            } else
-                state.bench_pattern = "";
-        } else if (!strncmp(argv[1], "--test=", 7)) {
-            state.test_name = argv[1] + 7;
-        } else {
-            seed = strtoul(argv[1], NULL, 10);
-        }
+        if (argv[1][7] == '=') {
+            state.bench_pattern = argv[1] + 8;
+            state.bench_pattern_len = strlen(state.bench_pattern);
+        } else
+            state.bench_pattern = "";
 
         argc--;
         argv++;
     }
 
+    seed = (argc > 1) ? atoi(argv[1]) : av_get_random_seed();
     fprintf(stderr, "checkasm: using random seed %u\n", seed);
     av_lfg_init(&checkasm_lfg, seed);
 
@@ -592,8 +402,7 @@ void *checkasm_check_func(void *func, const char *name, ...)
     if (!func || name_length <= 0 || name_length >= sizeof(name_buf))
         return NULL;
 
-    state.current_func = get_func(&state.funcs, name_buf);
-    state.funcs->color = 1;
+    state.current_func = get_func(name_buf, name_length);
     v = &state.current_func->versions;
 
     if (v->func) {

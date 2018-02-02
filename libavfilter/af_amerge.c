@@ -23,9 +23,6 @@
  * Audio merging filter
  */
 
-#define FF_INTERNAL_FIELDS 1
-#include "framequeue.h"
-
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
 #include "libavutil/channel_layout.h"
@@ -55,7 +52,7 @@ typedef struct {
 
 static const AVOption amerge_options[] = {
     { "inputs", "specify the number of inputs", OFFSET(nb_inputs),
-      AV_OPT_TYPE_INT, { .i64 = 2 }, 1, SWR_CH_MAX, FLAGS },
+      AV_OPT_TYPE_INT, { .i64 = 2 }, 2, SWR_CH_MAX, FLAGS },
     { NULL }
 };
 
@@ -81,7 +78,7 @@ static int query_formats(AVFilterContext *ctx)
     int64_t inlayout[SWR_CH_MAX], outlayout = 0;
     AVFilterFormats *formats;
     AVFilterChannelLayouts *layouts;
-    int i, ret, overlap = 0, nb_ch = 0;
+    int i, overlap = 0, nb_ch = 0;
 
     for (i = 0; i < s->nb_inputs; i++) {
         if (!ctx->inputs[i]->in_channel_layouts ||
@@ -96,15 +93,10 @@ static int query_formats(AVFilterContext *ctx)
             av_get_channel_layout_string(buf, sizeof(buf), 0, inlayout[i]);
             av_log(ctx, AV_LOG_INFO, "Using \"%s\" for input %d\n", buf, i + 1);
         }
-        s->in[i].nb_ch = FF_LAYOUT2COUNT(inlayout[i]);
-        if (s->in[i].nb_ch) {
+        s->in[i].nb_ch = av_get_channel_layout_nb_channels(inlayout[i]);
+        if (outlayout & inlayout[i])
             overlap++;
-        } else {
-            s->in[i].nb_ch = av_get_channel_layout_nb_channels(inlayout[i]);
-            if (outlayout & inlayout[i])
-                overlap++;
-            outlayout |= inlayout[i];
-        }
+        outlayout |= inlayout[i];
         nb_ch += s->in[i].nb_ch;
     }
     if (nb_ch > SWR_CH_MAX) {
@@ -133,22 +125,17 @@ static int query_formats(AVFilterContext *ctx)
                     *(route[i]++) = out_ch_number++;
     }
     formats = ff_make_format_list(ff_packed_sample_fmts_array);
-    if ((ret = ff_set_common_formats(ctx, formats)) < 0)
-        return ret;
+    ff_set_common_formats(ctx, formats);
     for (i = 0; i < s->nb_inputs; i++) {
         layouts = NULL;
-        if ((ret = ff_add_channel_layout(&layouts, inlayout[i])) < 0)
-            return ret;
-        if ((ret = ff_channel_layouts_ref(layouts, &ctx->inputs[i]->out_channel_layouts)) < 0)
-            return ret;
+        ff_add_channel_layout(&layouts, inlayout[i]);
+        ff_channel_layouts_ref(layouts, &ctx->inputs[i]->out_channel_layouts);
     }
     layouts = NULL;
-    if ((ret = ff_add_channel_layout(&layouts, outlayout)) < 0)
-        return ret;
-    if ((ret = ff_channel_layouts_ref(layouts, &ctx->outputs[0]->in_channel_layouts)) < 0)
-        return ret;
-
-    return ff_set_common_samplerates(ctx, ff_all_samplerates());
+    ff_add_channel_layout(&layouts, outlayout);
+    ff_channel_layouts_ref(layouts, &ctx->outputs[0]->in_channel_layouts);
+    ff_set_common_samplerates(ctx, ff_all_samplerates());
+    return 0;
 }
 
 static int config_output(AVFilterLink *outlink)
@@ -190,9 +177,7 @@ static int request_frame(AVFilterLink *outlink)
     int i, ret;
 
     for (i = 0; i < s->nb_inputs; i++)
-        if (!s->in[i].nb_samples ||
-            /* detect EOF immediately */
-            (ctx->inputs[i]->status_in && !ctx->inputs[i]->status_out))
+        if (!s->in[i].nb_samples)
             if ((ret = ff_request_frame(ctx->inputs[i])) < 0)
                 return ret;
     return 0;

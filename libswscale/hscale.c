@@ -20,21 +20,6 @@
 
 #include "swscale_internal.h"
 
-/// Scaler instance data
-typedef struct FilterContext
-{
-    uint16_t *filter;
-    int *filter_pos;
-    int filter_size;
-    int xInc;
-} FilterContext;
-
-/// Color conversion instance data
-typedef struct ColorContext
-{
-    uint32_t *pal;
-} ColorContext;
-
 static int lum_h_scale(SwsContext *c, SwsFilterDescriptor *desc, int sliceY, int sliceH)
 {
     FilterContext *instance = desc->instance;
@@ -166,8 +151,8 @@ int ff_init_desc_hscale(SwsFilterDescriptor *desc, SwsSlice *src, SwsSlice *dst,
 static int chr_h_scale(SwsContext *c, SwsFilterDescriptor *desc, int sliceY, int sliceH)
 {
     FilterContext *instance = desc->instance;
-    int srcW = AV_CEIL_RSHIFT(desc->src->width, desc->src->h_chr_sub_sample);
-    int dstW = AV_CEIL_RSHIFT(desc->dst->width, desc->dst->h_chr_sub_sample);
+    int srcW = FF_CEIL_RSHIFT(desc->src->width, desc->src->h_chr_sub_sample);
+    int dstW = FF_CEIL_RSHIFT(desc->dst->width, desc->dst->h_chr_sub_sample);
     int xInc = instance->xInc;
 
     uint8_t ** src1 = desc->src->plane[1].line;
@@ -201,7 +186,7 @@ static int chr_h_scale(SwsContext *c, SwsFilterDescriptor *desc, int sliceY, int
 
 static int chr_convert(SwsContext *c, SwsFilterDescriptor *desc, int sliceY, int sliceH)
 {
-    int srcW = AV_CEIL_RSHIFT(desc->src->width, desc->src->h_chr_sub_sample);
+    int srcW = FF_CEIL_RSHIFT(desc->src->width, desc->src->h_chr_sub_sample);
     ColorContext * instance = desc->instance;
     uint32_t * pal = instance->pal;
 

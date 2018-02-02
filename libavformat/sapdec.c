@@ -85,9 +85,8 @@ static int sap_read_header(AVFormatContext *s)
 
     ff_url_join(url, sizeof(url), "udp", NULL, host, port, "?localport=%d",
                 port);
-    ret = ffurl_open_whitelist(&sap->ann_fd, url, AVIO_FLAG_READ,
-                               &s->interrupt_callback, NULL,
-                               s->protocol_whitelist, s->protocol_blacklist, NULL);
+    ret = ffurl_open(&sap->ann_fd, url, AVIO_FLAG_READ,
+                     &s->interrupt_callback, NULL);
     if (ret)
         goto fail;
 
@@ -161,7 +160,7 @@ static int sap_read_header(AVFormatContext *s)
     sap->sdp_ctx->pb        = &sap->sdp_pb;
     sap->sdp_ctx->interrupt_callback = s->interrupt_callback;
 
-    if ((ret = ff_copy_whiteblacklists(sap->sdp_ctx, s)) < 0)
+    if ((ret = ff_copy_whitelists(sap->sdp_ctx, s)) < 0)
         goto fail;
 
     ret = avformat_open_input(&sap->sdp_ctx, "temp.sdp", infmt, NULL);
@@ -176,7 +175,7 @@ static int sap_read_header(AVFormatContext *s)
             goto fail;
         }
         st->id = i;
-        avcodec_parameters_copy(st->codecpar, sap->sdp_ctx->streams[i]->codecpar);
+        avcodec_copy_context(st->codec, sap->sdp_ctx->streams[i]->codec);
         st->time_base = sap->sdp_ctx->streams[i]->time_base;
     }
 
@@ -221,11 +220,11 @@ static int sap_fetch_packet(AVFormatContext *s, AVPacket *pkt)
             int i = s->nb_streams;
             AVStream *st = avformat_new_stream(s, NULL);
             if (!st) {
-                av_packet_unref(pkt);
+                av_free_packet(pkt);
                 return AVERROR(ENOMEM);
             }
             st->id = i;
-            avcodec_parameters_copy(st->codecpar, sap->sdp_ctx->streams[i]->codecpar);
+            avcodec_copy_context(st->codec, sap->sdp_ctx->streams[i]->codec);
             st->time_base = sap->sdp_ctx->streams[i]->time_base;
         }
     }

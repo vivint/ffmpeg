@@ -29,12 +29,12 @@
 
 #include "libavutil/buffer.h"
 
-#include "config.h"
+//#include "config.h"
 #include "avcodec.h"
 
 typedef struct ThreadFrame {
     AVFrame *f;
-    AVCodecContext *owner[2];
+    AVCodecContext *owner;
     // progress->data is an array of 2 ints holding progress for top/bottom
     // fields
     AVBufferRef *progress;

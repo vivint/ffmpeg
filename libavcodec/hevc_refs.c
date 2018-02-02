@@ -27,7 +27,6 @@
 #include "internal.h"
 #include "thread.h"
 #include "hevc.h"
-#include "hevcdec.h"
 
 void ff_hevc_unref_frame(HEVCContext *s, HEVCFrame *frame, int flags)
 {
@@ -175,7 +174,7 @@ int ff_hevc_output_frame(HEVCContext *s, AVFrame *out, int flush)
         int min_poc   = INT_MAX;
         int i, min_idx, ret;
 
-        if (s->sh.no_output_of_prior_pics_flag == 1 && s->no_rasl_output_flag == 1) {
+        if (s->sh.no_output_of_prior_pics_flag == 1) {
             for (i = 0; i < FF_ARRAY_ELEMS(s->DPB); i++) {
                 HEVCFrame *frame = &s->DPB[i];
                 if (!(frame->flags & HEVC_FRAME_FLAG_BUMPING) && frame->poc != s->poc &&
@@ -207,7 +206,7 @@ int ff_hevc_output_frame(HEVCContext *s, AVFrame *out, int flush)
             AVFrame *dst = out;
             AVFrame *src = frame->frame;
             const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(src->format);
-            int pixel_shift = !!(desc->comp[0].depth > 8);
+            int pixel_shift = !!(desc->comp[0].depth_minus1 > 7);
 
             ret = av_frame_ref(out, src);
             if (frame->flags & HEVC_FRAME_FLAG_BUMPING)
@@ -300,7 +299,7 @@ int ff_hevc_slice_rpl(HEVCContext *s)
 {
     SliceHeader *sh = &s->sh;
 
-    uint8_t nb_list = sh->slice_type == HEVC_SLICE_B ? 2 : 1;
+    uint8_t nb_list = sh->slice_type == B_SLICE ? 2 : 1;
     uint8_t list_idx;
     int i, j, ret;
 
@@ -329,7 +328,7 @@ int ff_hevc_slice_rpl(HEVCContext *s)
         while (rpl_tmp.nb_refs < sh->nb_refs[list_idx]) {
             for (i = 0; i < FF_ARRAY_ELEMS(cand_lists); i++) {
                 RefPicList *rps = &s->rps[cand_lists[i]];
-                for (j = 0; j < rps->nb_refs && rpl_tmp.nb_refs < HEVC_MAX_REFS; j++) {
+                for (j = 0; j < rps->nb_refs && rpl_tmp.nb_refs < MAX_REFS; j++) {
                     rpl_tmp.list[rpl_tmp.nb_refs]       = rps->list[j];
                     rpl_tmp.ref[rpl_tmp.nb_refs]        = rps->ref[j];
                     rpl_tmp.isLongTerm[rpl_tmp.nb_refs] = i == 2;
@@ -387,7 +386,7 @@ static HEVCFrame *find_ref_idx(HEVCContext *s, int poc)
         }
     }
 
-    if (s->nal_unit_type != HEVC_NAL_CRA_NUT && !IS_BLA(s))
+    if (s->nal_unit_type != NAL_CRA_NUT && !IS_BLA(s))
         av_log(s->avctx, AV_LOG_ERROR,
                "Could not find ref with POC %d\n", poc);
     return NULL;
@@ -531,9 +530,9 @@ int ff_hevc_compute_poc(HEVCContext *s, int poc_lsb)
         poc_msb = prev_poc_msb;
 
     // For BLA picture types, POCmsb is set to 0.
-    if (s->nal_unit_type == HEVC_NAL_BLA_W_LP   ||
-        s->nal_unit_type == HEVC_NAL_BLA_W_RADL ||
-        s->nal_unit_type == HEVC_NAL_BLA_N_LP)
+    if (s->nal_unit_type == NAL_BLA_W_LP   ||
+        s->nal_unit_type == NAL_BLA_W_RADL ||
+        s->nal_unit_type == NAL_BLA_N_LP)
         poc_msb = 0;
 
     return poc_msb + poc_lsb;

@@ -39,9 +39,6 @@ static int ass_probe(AVProbeData *p)
     FFTextReader tr;
     ff_text_init_buf(&tr, p->buf, p->buf_size);
 
-    while (ff_text_peek_r8(&tr) == '\r' || ff_text_peek_r8(&tr) == '\n')
-        ff_text_r8(&tr);
-
     ff_text_read(&tr, buf, sizeof(buf));
 
     if (!memcmp(buf, "[Script Info]", 13))
@@ -121,14 +118,12 @@ static int ass_read_header(AVFormatContext *s)
     if (!st)
         return AVERROR(ENOMEM);
     avpriv_set_pts_info(st, 64, 1, 100);
-    st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
-    st->codecpar->codec_id   = AV_CODEC_ID_ASS;
+    st->codec->codec_type = AVMEDIA_TYPE_SUBTITLE;
+    st->codec->codec_id   = AV_CODEC_ID_ASS;
 
     av_bprint_init(&header, 0, AV_BPRINT_SIZE_UNLIMITED);
     av_bprint_init(&line,   0, AV_BPRINT_SIZE_UNLIMITED);
     av_bprint_init(&rline,  0, AV_BPRINT_SIZE_UNLIMITED);
-
-    ass->q.keep_duplicates = 1;
 
     for (;;) {
         int64_t pos = get_line(&line, &tr);
@@ -153,11 +148,11 @@ static int ass_read_header(AVFormatContext *s)
         sub->duration = duration;
     }
 
-    res = ff_bprint_to_codecpar_extradata(st->codecpar, &header);
+    res = avpriv_bprint_to_extradata(st->codec, &header);
     if (res < 0)
         goto end;
 
-    ff_subtitles_queue_finalize(s, &ass->q);
+    ff_subtitles_queue_finalize(&ass->q);
 
 end:
     av_bprint_finalize(&header, NULL);

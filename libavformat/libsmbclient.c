@@ -365,7 +365,7 @@ static const AVClass libsmbclient_context_class = {
     .version        = LIBAVUTIL_VERSION_INT,
 };
 
-const URLProtocol ff_libsmbclient_protocol = {
+URLProtocol ff_libsmbclient_protocol = {
     .name                = "smb",
     .url_open            = libsmbc_open,
     .url_read            = libsmbc_read,

@@ -34,7 +34,6 @@ typedef struct FICThreadContext {
     int slice_h;
     int src_size;
     int y_off;
-    int p_frame;
 } FICThreadContext;
 
 typedef struct FICContext {
@@ -134,13 +133,16 @@ static void fic_idct_put(uint8_t *dst, int stride, int16_t *block)
     }
 }
 static int fic_decode_block(FICContext *ctx, GetBitContext *gb,
-                            uint8_t *dst, int stride, int16_t *block, int *is_p)
+                            uint8_t *dst, int stride, int16_t *block)
 {
     int i, num_coeff;
 
     /* Is it a skip block? */
     if (get_bits1(gb)) {
-        *is_p = 1;
+        /* This is a P-frame. */
+        ctx->frame->key_frame = 0;
+        ctx->frame->pict_type = AV_PICTURE_TYPE_P;
+
         return 0;
     }
 
@@ -180,8 +182,7 @@ static int fic_decode_slice(AVCodecContext *avctx, void *tdata)
             for (x = 0; x < (ctx->aligned_width >> !!p); x += 8) {
                 int ret;
 
-                if ((ret = fic_decode_block(ctx, &gb, dst + x, stride,
-                                            tctx->block, &tctx->p_frame)) != 0)
+                if ((ret = fic_decode_block(ctx, &gb, dst + x, stride, tctx->block)) != 0)
                     return ret;
             }
 
@@ -308,7 +309,7 @@ static int fic_decode_frame(AVCodecContext *avctx, void *data,
         return AVERROR_INVALIDDATA;
     }
 
-    if (!tsize || !AV_RL16(src + 37) || !AV_RL16(src + 39))
+    if (!tsize)
         skip_cursor = 1;
 
     if (!skip_cursor && tsize < 32) {
@@ -321,8 +322,8 @@ static int fic_decode_frame(AVCodecContext *avctx, void *data,
     cur_x = AV_RL16(src + 33);
     cur_y = AV_RL16(src + 35);
     if (!skip_cursor && (cur_x > avctx->width || cur_y > avctx->height)) {
-        av_log(avctx, AV_LOG_DEBUG,
-               "Invalid cursor position: (%d,%d). Skipping cursor.\n",
+        av_log(avctx, AV_LOG_WARNING,
+               "Invalid cursor position: (%d,%d). Skipping cusor.\n",
                cur_x, cur_y);
         skip_cursor = 1;
     }
@@ -346,6 +347,15 @@ static int fic_decode_frame(AVCodecContext *avctx, void *data,
         av_log(avctx, AV_LOG_ERROR, "Not enough frame data to decode.\n");
         return AVERROR_INVALIDDATA;
     }
+
+    /*
+     * Set the frametype to I initially. It will be set to P if the frame
+     * has any dependencies (skip blocks). There will be a race condition
+     * inside the slice decode function to set these, but we do not care.
+     * since they will only ever be set to 0/P.
+     */
+    ctx->frame->key_frame = 1;
+    ctx->frame->pict_type = AV_PICTURE_TYPE_I;
 
     /* Allocate slice data. */
     av_fast_malloc(&ctx->slice_data, &ctx->slice_data_size,
@@ -388,15 +398,6 @@ static int fic_decode_frame(AVCodecContext *avctx, void *data,
                               NULL, nslices, sizeof(ctx->slice_data[0]))) < 0)
         return ret;
 
-    ctx->frame->key_frame = 1;
-    ctx->frame->pict_type = AV_PICTURE_TYPE_I;
-    for (slice = 0; slice < nslices; slice++) {
-        if (ctx->slice_data[slice].p_frame) {
-            ctx->frame->key_frame = 0;
-            ctx->frame->pict_type = AV_PICTURE_TYPE_P;
-            break;
-        }
-    }
     av_frame_free(&ctx->final_frame);
     ctx->final_frame = av_frame_clone(ctx->frame);
     if (!ctx->final_frame) {
@@ -455,7 +456,7 @@ static av_cold int fic_decode_init(AVCodecContext *avctx)
 }
 
 static const AVOption options[] = {
-{ "skip_cursor", "skip the cursor", offsetof(FICContext, skip_cursor), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_VIDEO_PARAM },
+{ "skip_cursor", "skip the cursor", offsetof(FICContext, skip_cursor), AV_OPT_TYPE_INT, {.i64 = 0 }, 0, 1, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_VIDEO_PARAM },
 { NULL },
 };
 

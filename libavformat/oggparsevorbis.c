@@ -28,10 +28,9 @@
 #include "libavutil/base64.h"
 #include "libavutil/bswap.h"
 #include "libavutil/dict.h"
-
 #include "libavcodec/bytestream.h"
+#include "libavcodec/get_bits.h"
 #include "libavcodec/vorbis_parser.h"
-
 #include "avformat.h"
 #include "flac_picture.h"
 #include "internal.h"
@@ -153,8 +152,8 @@ int ff_vorbis_comment(AVFormatContext *as, AVDictionary **m,
              * recommended way of embedding cover art within VorbisComments."
              */
             if (!strcmp(tt, "METADATA_BLOCK_PICTURE") && parse_picture) {
-                int ret, len = AV_BASE64_DECODE_SIZE(vl);
-                char *pict = av_malloc(len);
+                int ret;
+                char *pict = av_malloc(vl);
 
                 if (!pict) {
                     av_log(as, AV_LOG_WARNING, "out-of-memory error. Skipping cover art block.\n");
@@ -162,11 +161,10 @@ int ff_vorbis_comment(AVFormatContext *as, AVDictionary **m,
                     av_freep(&ct);
                     continue;
                 }
-                ret = av_base64_decode(pict, ct, len);
+                if ((ret = av_base64_decode(pict, ct, vl)) > 0)
+                    ret = ff_flac_parse_picture(as, pict, ret);
                 av_freep(&tt);
                 av_freep(&ct);
-                if (ret > 0)
-                    ret = ff_flac_parse_picture(as, pict, ret);
                 av_freep(&pict);
                 if (ret < 0) {
                     av_log(as, AV_LOG_WARNING, "Failed to parse cover art block.\n");
@@ -337,14 +335,14 @@ static int vorbis_header(AVFormatContext *s, int idx)
             return AVERROR_INVALIDDATA;
 
         channels = bytestream_get_byte(&p);
-        if (st->codecpar->channels && channels != st->codecpar->channels) {
+        if (st->codec->channels && channels != st->codec->channels) {
             av_log(s, AV_LOG_ERROR, "Channel change is not supported\n");
             return AVERROR_PATCHWELCOME;
         }
-        st->codecpar->channels = channels;
+        st->codec->channels = channels;
         srate               = bytestream_get_le32(&p);
         p += 4; // skip maximum bitrate
-        st->codecpar->bit_rate = bytestream_get_le32(&p); // nominal bitrate
+        st->codec->bit_rate = bytestream_get_le32(&p); // nominal bitrate
         p += 4; // skip minimum bitrate
 
         blocksize = bytestream_get_byte(&p);
@@ -359,11 +357,11 @@ static int vorbis_header(AVFormatContext *s, int idx)
         if (bytestream_get_byte(&p) != 1) /* framing_flag */
             return AVERROR_INVALIDDATA;
 
-        st->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
-        st->codecpar->codec_id   = AV_CODEC_ID_VORBIS;
+        st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
+        st->codec->codec_id   = AV_CODEC_ID_VORBIS;
 
         if (srate > 0) {
-            st->codecpar->sample_rate = srate;
+            st->codec->sample_rate = srate;
             avpriv_set_pts_info(st, 64, 1, srate);
         }
     } else if (os->buf[os->pstart] == 3) {
@@ -383,17 +381,17 @@ static int vorbis_header(AVFormatContext *s, int idx)
             }
         }
     } else {
-        int ret = fixup_vorbis_headers(s, priv, &st->codecpar->extradata);
+        int ret = fixup_vorbis_headers(s, priv, &st->codec->extradata);
         if (ret < 0) {
-            st->codecpar->extradata_size = 0;
+            st->codec->extradata_size = 0;
             return ret;
         }
-        st->codecpar->extradata_size = ret;
+        st->codec->extradata_size = ret;
 
-        priv->vp = av_vorbis_parse_init(st->codecpar->extradata, st->codecpar->extradata_size);
+        priv->vp = av_vorbis_parse_init(st->codec->extradata, st->codec->extradata_size);
         if (!priv->vp) {
-            av_freep(&st->codecpar->extradata);
-            st->codecpar->extradata_size = 0;
+            av_freep(&st->codec->extradata);
+            st->codec->extradata_size = 0;
             return AVERROR_UNKNOWN;
         }
     }
@@ -407,9 +405,6 @@ static int vorbis_packet(AVFormatContext *s, int idx)
     struct ogg_stream *os = ogg->streams + idx;
     struct oggvorbis_private *priv = os->private;
     int duration, flags = 0;
-
-    if (!priv->vp)
-        return AVERROR_INVALIDDATA;
 
     /* first packet handling
      * here we parse the duration of each packet in the first page and compare

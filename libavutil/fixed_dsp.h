@@ -161,8 +161,6 @@ typedef struct AVFixedDSPContext {
  */
 AVFixedDSPContext * avpriv_alloc_fixed_dsp(int strict);
 
-void ff_fixed_dsp_init_x86(AVFixedDSPContext *fdsp);
-
 /**
  * Calculate the square root
  *

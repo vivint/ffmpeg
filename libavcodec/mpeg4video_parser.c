@@ -1,5 +1,5 @@
 /*
- * MPEG-4 video frame extraction
+ * MPEG4 Video frame extraction
  * Copyright (c) 2003 Fabrice Bellard
  * Copyright (c) 2003 Michael Niedermayer
  *

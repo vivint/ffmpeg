@@ -25,7 +25,6 @@
 #include "libavcodec/mpeg4audio.h"
 #include "libavutil/opt.h"
 #include "avformat.h"
-#include "internal.h"
 #include "rawenc.h"
 
 #define MAX_EXTRADATA_SIZE 1024
@@ -85,13 +84,13 @@ static int latm_decode_extradata(LATMContext *ctx, uint8_t *buf, int size)
 static int latm_write_header(AVFormatContext *s)
 {
     LATMContext *ctx = s->priv_data;
-    AVCodecParameters *par = s->streams[0]->codecpar;
+    AVCodecContext *avctx = s->streams[0]->codec;
 
-    if (par->codec_id == AV_CODEC_ID_AAC_LATM)
+    if (avctx->codec_id == AV_CODEC_ID_AAC_LATM)
         return 0;
 
-    if (par->extradata_size > 0 &&
-        latm_decode_extradata(ctx, par->extradata, par->extradata_size) < 0)
+    if (avctx->extradata_size > 0 &&
+        latm_decode_extradata(ctx, avctx->extradata, avctx->extradata_size) < 0)
         return AVERROR_INVALIDDATA;
 
     return 0;
@@ -100,7 +99,7 @@ static int latm_write_header(AVFormatContext *s)
 static void latm_write_frame_header(AVFormatContext *s, PutBitContext *bs)
 {
     LATMContext *ctx = s->priv_data;
-    AVCodecParameters *par = s->streams[0]->codecpar;
+    AVCodecContext *avctx = s->streams[0]->codec;
     int header_size;
 
     /* AudioMuxElement */
@@ -116,16 +115,16 @@ static void latm_write_frame_header(AVFormatContext *s, PutBitContext *bs)
 
         /* AudioSpecificConfig */
         if (ctx->object_type == AOT_ALS) {
-            header_size = par->extradata_size-(ctx->off >> 3);
-            avpriv_copy_bits(bs, &par->extradata[ctx->off >> 3], header_size);
+            header_size = avctx->extradata_size-(ctx->off >> 3);
+            avpriv_copy_bits(bs, &avctx->extradata[ctx->off >> 3], header_size);
         } else {
             // + 3 assumes not scalable and dependsOnCoreCoder == 0,
             // see decode_ga_specific_config in libavcodec/aacdec.c
-            avpriv_copy_bits(bs, par->extradata, ctx->off + 3);
+            avpriv_copy_bits(bs, avctx->extradata, ctx->off + 3);
 
             if (!ctx->channel_conf) {
                 GetBitContext gb;
-                int ret = init_get_bits8(&gb, par->extradata, par->extradata_size);
+                int ret = init_get_bits8(&gb, avctx->extradata, avctx->extradata_size);
                 av_assert0(ret >= 0); // extradata size has been checked already, so this should not fail
                 skip_bits_long(&gb, ctx->off + 3);
                 avpriv_copy_pce_data(bs, &gb);
@@ -151,10 +150,15 @@ static int latm_write_packet(AVFormatContext *s, AVPacket *pkt)
     int i, len;
     uint8_t loas_header[] = "\x56\xe0\x00";
 
-    if (s->streams[0]->codecpar->codec_id == AV_CODEC_ID_AAC_LATM)
+    if (s->streams[0]->codec->codec_id == AV_CODEC_ID_AAC_LATM)
         return ff_raw_write_packet(s, pkt);
 
-    if (!s->streams[0]->codecpar->extradata) {
+    if (pkt->size > 2 && pkt->data[0] == 0xff && (pkt->data[1] >> 4) == 0xf) {
+        av_log(s, AV_LOG_ERROR, "ADTS header detected - ADTS will not be incorrectly muxed into LATM\n");
+        return AVERROR_INVALIDDATA;
+    }
+
+    if (!s->streams[0]->codec->extradata) {
         if(pkt->size > 2 && pkt->data[0] == 0x56 && (pkt->data[1] >> 4) == 0xe &&
             (AV_RB16(pkt->data + 1) & 0x1FFF) + 3 == pkt->size)
             return ff_raw_write_packet(s, pkt);
@@ -213,19 +217,6 @@ too_large:
     return AVERROR_INVALIDDATA;
 }
 
-static int latm_check_bitstream(struct AVFormatContext *s, const AVPacket *pkt)
-{
-    int ret = 1;
-    AVStream *st = s->streams[pkt->stream_index];
-
-    if (st->codecpar->codec_id == AV_CODEC_ID_AAC) {
-        if (pkt->size > 2 && (AV_RB16(pkt->data) & 0xfff0) == 0xfff0)
-            ret = ff_stream_add_bitstream_filter(st, "aac_adtstoasc", NULL);
-    }
-
-    return ret;
-}
-
 AVOutputFormat ff_latm_muxer = {
     .name           = "latm",
     .long_name      = NULL_IF_CONFIG_SMALL("LOAS/LATM"),
@@ -237,6 +228,5 @@ AVOutputFormat ff_latm_muxer = {
     .write_header   = latm_write_header,
     .write_packet   = latm_write_packet,
     .priv_class     = &latm_muxer_class,
-    .check_bitstream= latm_check_bitstream,
     .flags          = AVFMT_NOTIMESTAMPS,
 };

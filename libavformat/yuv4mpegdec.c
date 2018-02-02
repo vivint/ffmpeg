@@ -19,8 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/imgutils.h"
-
 #include "avformat.h"
 #include "internal.h"
 #include "yuv4mpeg.h"
@@ -247,18 +245,18 @@ static int yuv4_read_header(AVFormatContext *s)
     st = avformat_new_stream(s, NULL);
     if (!st)
         return AVERROR(ENOMEM);
-    st->codecpar->width  = width;
-    st->codecpar->height = height;
+    st->codec->width  = width;
+    st->codec->height = height;
     av_reduce(&raten, &rated, raten, rated, (1UL << 31) - 1);
     avpriv_set_pts_info(st, 64, rated, raten);
     st->avg_frame_rate                = av_inv_q(st->time_base);
-    st->codecpar->format              = pix_fmt;
-    st->codecpar->codec_type          = AVMEDIA_TYPE_VIDEO;
-    st->codecpar->codec_id            = AV_CODEC_ID_RAWVIDEO;
+    st->codec->pix_fmt                = pix_fmt;
+    st->codec->codec_type             = AVMEDIA_TYPE_VIDEO;
+    st->codec->codec_id               = AV_CODEC_ID_RAWVIDEO;
     st->sample_aspect_ratio           = (AVRational){ aspectn, aspectd };
-    st->codecpar->chroma_location     = chroma_sample_location;
-    st->codecpar->field_order         = field_order;
-    s->packet_size = av_image_get_buffer_size(st->codecpar->format, width, height, 1) + Y4M_FRAME_MAGIC_LEN;
+    st->codec->chroma_sample_location = chroma_sample_location;
+    st->codec->field_order            = field_order;
+    s->packet_size = avpicture_get_size(st->codec->pix_fmt, width, height) + Y4M_FRAME_MAGIC_LEN;
     if ((int) s->packet_size < 0)
         return s->packet_size;
     s->internal->data_offset = avio_tell(pb);
@@ -295,10 +293,9 @@ static int yuv4_read_packet(AVFormatContext *s, AVPacket *pkt)
     ret = av_get_packet(s->pb, pkt, s->packet_size - Y4M_FRAME_MAGIC_LEN);
     if (ret < 0)
         return ret;
-    else if (ret != s->packet_size - Y4M_FRAME_MAGIC_LEN) {
-        av_packet_unref(pkt);
+    else if (ret != s->packet_size - Y4M_FRAME_MAGIC_LEN)
         return s->pb->eof_reached ? AVERROR_EOF : AVERROR(EIO);
-    }
+
     pkt->stream_index = 0;
     pkt->pts = (off - s->internal->data_offset) / s->packet_size;
     pkt->duration = 1;
@@ -308,8 +305,7 @@ static int yuv4_read_packet(AVFormatContext *s, AVPacket *pkt)
 static int yuv4_read_seek(AVFormatContext *s, int stream_index,
                           int64_t pts, int flags)
 {
-    if (avio_seek(s->pb, pts * s->packet_size + s->internal->data_offset, SEEK_SET) < 0)
-        return -1;
+    avio_seek(s->pb, pts * s->packet_size + s->internal->data_offset, SEEK_SET);
     return 0;
 }
 

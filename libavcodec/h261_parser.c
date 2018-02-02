@@ -1,5 +1,5 @@
 /*
- * H.261 parser
+ * H261 parser
  * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  * Copyright (c) 2004 Maarten Daniels
  *
@@ -22,7 +22,7 @@
 
 /**
  * @file
- * H.261 parser
+ * h261codec.
  */
 
 #include "parser.h"

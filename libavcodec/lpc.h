@@ -95,7 +95,7 @@ int ff_lpc_calc_coefs(LPCContext *s,
                       int max_order, int precision,
                       int32_t coefs[][MAX_LPC_ORDER], int *shift,
                       enum FFLPCType lpc_type, int lpc_passes,
-                      int omethod, int min_shift, int max_shift, int zero_shift);
+                      int omethod, int max_shift, int zero_shift);
 
 int ff_lpc_calc_ref_coefs(LPCContext *s,
                           const int32_t *samples, int order, double *ref);
@@ -116,12 +116,12 @@ void ff_lpc_init_x86(LPCContext *s);
 void ff_lpc_end(LPCContext *s);
 
 #if USE_FIXED
-typedef int LPC_TYPE;
+#define LPC_TYPE int
 #else
 #ifdef LPC_USE_DOUBLE
-typedef double LPC_TYPE;
+#define LPC_TYPE double
 #else
-typedef float LPC_TYPE;
+#define LPC_TYPE float
 #endif
 #endif // USE_FIXED
 

@@ -1,5 +1,5 @@
 /*
- * Blackmagic DeckLink input
+ * Blackmagic DeckLink output
  * Copyright (c) 2013-2014 Ramiro Polla
  *
  * This file is part of FFmpeg.
@@ -19,9 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVDEVICE_DECKLINK_DEC_H
-#define AVDEVICE_DECKLINK_DEC_H
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,5 +30,3 @@ int ff_decklink_read_close(AVFormatContext *avctx);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
-#endif /* AVDEVICE_DECKLINK_DEC_H */

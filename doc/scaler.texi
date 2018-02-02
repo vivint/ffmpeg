@@ -13,8 +13,7 @@ FFmpeg tools. For programmatic use, they can be set explicitly in the
 @anchor{sws_flags}
 @item sws_flags
 Set the scaler flags. This is also used to set the scaling
-algorithm. Only a single algorithm should be selected. Default
-value is @samp{bicubic}.
+algorithm. Only a single algorithm should be selected.
 
 It accepts the following values:
 @table @samp
@@ -47,7 +46,7 @@ Select Gaussian rescaling algorithm.
 Select sinc rescaling algorithm.
 
 @item lanczos
-Select Lanczos rescaling algorithm.
+Select lanczos rescaling algorithm.
 
 @item spline
 Select natural bicubic spline rescaling algorithm.
@@ -92,7 +91,6 @@ Select source range.
 @item dst_range
 Select destination range.
 
-@anchor{sws_params}
 @item param0, param1
 Set scaling algorithm parameters. The specified values are specific of
 some scaling algorithms and ignored by others. The specified values

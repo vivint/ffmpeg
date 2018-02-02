@@ -32,6 +32,7 @@
 #include "cavs.h"
 #include "internal.h"
 #include "mpeg12data.h"
+#include "mpegvideo.h"
 
 static const uint8_t mv_scan[4] = {
     MV_FWD_X0, MV_FWD_X1,
@@ -545,7 +546,7 @@ static inline int dequant(AVSContext *h, int16_t *level_buf, uint8_t *run_buf,
  */
 static int decode_residual_block(AVSContext *h, GetBitContext *gb,
                                  const struct dec_2dvlc *r, int esc_golomb_order,
-                                 int qp, uint8_t *dst, ptrdiff_t stride)
+                                 int qp, uint8_t *dst, int stride)
 {
     int i, esc_code, level, mask, ret;
     unsigned int level_code, run;
@@ -1104,7 +1105,6 @@ static int decode_pic(AVSContext *h)
             }
         } while (ff_cavs_next_mb(h));
     }
-    emms_c();
     if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
         av_frame_unref(h->DPB[1].f);
         FFSWAP(AVSFrame, h->cur, h->DPB[1]);
@@ -1218,8 +1218,6 @@ static int cavs_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
                 h->got_keyframe = 1;
             }
         case PIC_PB_START_CODE:
-            if (*got_frame)
-                av_frame_unref(data);
             *got_frame = 0;
             if (!h->got_keyframe)
                 break;

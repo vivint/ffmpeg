@@ -23,7 +23,6 @@
 #include <pulse/error.h>
 #include "libavformat/avformat.h"
 #include "libavformat/internal.h"
-#include "libavutil/internal.h"
 #include "libavutil/opt.h"
 #include "libavutil/time.h"
 #include "libavutil/log.h"
@@ -334,7 +333,7 @@ static int pulse_set_volume(PulseData *s, double volume)
     pa_volume_t vol;
     const pa_sample_spec *ss = pa_stream_get_sample_spec(s->stream);
 
-    vol = pa_sw_volume_multiply(lrint(volume * PA_VOLUME_NORM), s->base_volume);
+    vol = pa_sw_volume_multiply(lround(volume * PA_VOLUME_NORM), s->base_volume);
     pa_cvolume_set(&cvol, ss->channels, PA_VOLUME_NORM);
     pa_sw_cvolume_multiply_scalar(&cvol, &cvol, vol);
     pa_threaded_mainloop_lock(s->mainloop);
@@ -452,7 +451,7 @@ static av_cold int pulse_write_header(AVFormatContext *h)
                                                   PA_STREAM_AUTO_TIMING_UPDATE |
                                                   PA_STREAM_NOT_MONOTONIC;
 
-    if (h->nb_streams != 1 || h->streams[0]->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+    if (h->nb_streams != 1 || h->streams[0]->codec->codec_type != AVMEDIA_TYPE_AUDIO) {
         av_log(s, AV_LOG_ERROR, "Only a single audio stream is supported.\n");
         return AVERROR(EINVAL);
     }
@@ -468,8 +467,8 @@ static av_cold int pulse_write_header(AVFormatContext *h)
 
     if (s->buffer_duration) {
         int64_t bytes = s->buffer_duration;
-        bytes *= st->codecpar->channels * st->codecpar->sample_rate *
-                 av_get_bytes_per_sample(st->codecpar->format);
+        bytes *= st->codec->channels * st->codec->sample_rate *
+                 av_get_bytes_per_sample(st->codec->sample_fmt);
         bytes /= 1000;
         buffer_attributes.tlength = FFMAX(s->buffer_size, av_clip64(bytes, 0, UINT32_MAX - 1));
         av_log(s, AV_LOG_DEBUG,
@@ -483,9 +482,9 @@ static av_cold int pulse_write_header(AVFormatContext *h)
     if (s->minreq)
         buffer_attributes.minreq = s->minreq;
 
-    sample_spec.format = ff_codec_id_to_pulse_format(st->codecpar->codec_id);
-    sample_spec.rate = st->codecpar->sample_rate;
-    sample_spec.channels = st->codecpar->channels;
+    sample_spec.format = ff_codec_id_to_pulse_format(st->codec->codec_id);
+    sample_spec.rate = st->codec->sample_rate;
+    sample_spec.channels = st->codec->channels;
     if (!pa_sample_spec_valid(&sample_spec)) {
         av_log(s, AV_LOG_ERROR, "Invalid sample spec.\n");
         return AVERROR(EINVAL);
@@ -494,10 +493,10 @@ static av_cold int pulse_write_header(AVFormatContext *h)
     if (sample_spec.channels == 1) {
         channel_map.channels = 1;
         channel_map.map[0] = PA_CHANNEL_POSITION_MONO;
-    } else if (st->codecpar->channel_layout) {
-        if (av_get_channel_layout_nb_channels(st->codecpar->channel_layout) != st->codecpar->channels)
+    } else if (st->codec->channel_layout) {
+        if (av_get_channel_layout_nb_channels(st->codec->channel_layout) != st->codec->channels)
             return AVERROR(EINVAL);
-        pulse_map_channels_to_pulse(st->codecpar->channel_layout, &channel_map);
+        pulse_map_channels_to_pulse(st->codec->channel_layout, &channel_map);
         /* Unknown channel is present in channel_layout, let PulseAudio use its default. */
         if (channel_map.channels != sample_spec.channels) {
             av_log(s, AV_LOG_WARNING, "Unknown channel. Using defaul channel map.\n");
@@ -637,8 +636,9 @@ static int pulse_write_packet(AVFormatContext *h, AVPacket *pkt)
         s->timestamp += pkt->duration;
     } else {
         AVStream *st = h->streams[0];
-        AVRational r = { 1, st->codecpar->sample_rate };
-        int64_t samples = pkt->size / (av_get_bytes_per_sample(st->codecpar->format) * st->codecpar->channels);
+        AVCodecContext *codec_ctx = st->codec;
+        AVRational r = { 1, codec_ctx->sample_rate };
+        int64_t samples = pkt->size / (av_get_bytes_per_sample(codec_ctx->sample_fmt) * codec_ctx->channels);
         s->timestamp += av_rescale_q(samples, r, st->time_base);
     }
 
@@ -677,7 +677,7 @@ static int pulse_write_frame(AVFormatContext *h, int stream_index,
 
     /* Planar formats are not supported yet. */
     if (flags & AV_WRITE_UNCODED_FRAME_QUERY)
-        return av_sample_fmt_is_planar(h->streams[stream_index]->codecpar->format) ?
+        return av_sample_fmt_is_planar(h->streams[stream_index]->codec->sample_fmt) ?
                AVERROR(EINVAL) : 0;
 
     pkt.data     = (*frame)->data[0];

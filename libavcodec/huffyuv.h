@@ -38,7 +38,6 @@
 #include "huffyuvencdsp.h"
 #include "put_bits.h"
 #include "lossless_videodsp.h"
-#include "lossless_videoencdsp.h"
 
 #define VLC_BITS 12
 
@@ -90,7 +89,6 @@ typedef struct HYuvContext {
     HuffYUVDSPContext hdsp;
     HuffYUVEncDSPContext hencdsp;
     LLVidDSPContext llviddsp;
-    LLVidEncDSPContext llvidencdsp;
     int non_determ; // non-deterministic, multi-threaded encoder allowed
 } HYuvContext;
 

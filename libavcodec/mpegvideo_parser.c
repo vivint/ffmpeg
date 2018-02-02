@@ -1,5 +1,5 @@
 /*
- * MPEG-1 / MPEG-2 video parser
+ * MPEG1 / MPEG2 video parser
  * Copyright (c) 2000,2001 Fabrice Bellard
  * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  *
@@ -168,10 +168,8 @@ static void mpegvideo_extract_headers(AVCodecParserContext *s,
 
     if (pix_fmt != AV_PIX_FMT_NONE) {
         s->format = pix_fmt;
-        s->width  = pc->width;
-        s->height = pc->height;
-        s->coded_width  = FFALIGN(pc->width,  16);
-        s->coded_height = FFALIGN(pc->height, 16);
+        s->width  = s->coded_width  = pc->width;
+        s->height = s->coded_height = pc->height;
     }
 
 #if FF_API_AVCTX_TIMEBASE

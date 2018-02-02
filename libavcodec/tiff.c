@@ -408,7 +408,7 @@ static int tiff_unpack_lzma(TiffContext *s, AVFrame *p, uint8_t *dst, int stride
                             const uint8_t *src, int size, int width, int lines,
                             int strip_start, int is_yuv)
 {
-    uint64_t outlen = width * (uint64_t)lines;
+    uint64_t outlen = width * lines;
     int ret, line;
     uint8_t *buf = av_malloc(outlen);
     if (!buf)
@@ -772,18 +772,9 @@ static void set_sar(TiffContext *s, unsigned tag, unsigned num, unsigned den)
     int offset = tag == TIFF_YRES ? 2 : 0;
     s->res[offset++] = num;
     s->res[offset]   = den;
-    if (s->res[0] && s->res[1] && s->res[2] && s->res[3]) {
-        uint64_t num = s->res[2] * (uint64_t)s->res[1];
-        uint64_t den = s->res[0] * (uint64_t)s->res[3];
-        if (num > INT64_MAX || den > INT64_MAX) {
-            num = num >> 1;
-            den = den >> 1;
-        }
+    if (s->res[0] && s->res[1] && s->res[2] && s->res[3])
         av_reduce(&s->avctx->sample_aspect_ratio.num, &s->avctx->sample_aspect_ratio.den,
-                  num, den, INT32_MAX);
-        if (!s->avctx->sample_aspect_ratio.den)
-            s->avctx->sample_aspect_ratio = (AVRational) {0, 1};
-    }
+                  s->res[2] * (uint64_t)s->res[1], s->res[0] * (uint64_t)s->res[3], INT32_MAX);
 }
 
 static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
@@ -870,7 +861,6 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
         break;
     case TIFF_COMPR:
         s->compr     = value;
-        av_log(s->avctx, AV_LOG_DEBUG, "compression: %d\n", s->compr);
         s->predictor = 0;
         switch (s->compr) {
         case TIFF_RAW:
@@ -914,11 +904,6 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
         break;
     case TIFF_STRIP_OFFS:
         if (count == 1) {
-            if (value > INT_MAX) {
-                av_log(s->avctx, AV_LOG_ERROR,
-                    "strippos %u too large\n", value);
-                return AVERROR_INVALIDDATA;
-            }
             s->strippos = 0;
             s->stripoff = value;
         } else
@@ -930,11 +915,6 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
         break;
     case TIFF_STRIP_SIZE:
         if (count == 1) {
-            if (value > INT_MAX) {
-                av_log(s->avctx, AV_LOG_ERROR,
-                    "stripsize %u too large\n", value);
-                return AVERROR_INVALIDDATA;
-            }
             s->stripsizesoff = 0;
             s->stripsize     = value;
             s->strips        = 1;
@@ -1006,11 +986,6 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
         bytestream2_skip(&pal_gb[2], count / 3 * off * 2);
 
         off = (type_sizes[type] - 1) << 3;
-        if (off > 31U) {
-            av_log(s->avctx, AV_LOG_ERROR, "palette shift %d is out of range\n", off);
-            return AVERROR_INVALIDDATA;
-        }
-
         for (i = 0; i < count / 3; i++) {
             uint32_t p = 0xFF000000;
             p |= (ff_tget(&pal_gb[0], type, s->le) >> off) << 16;
@@ -1029,13 +1004,8 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
             av_log(s->avctx, AV_LOG_ERROR, "subsample count invalid\n");
             return AVERROR_INVALIDDATA;
         }
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < count; i++)
             s->subsampling[i] = ff_tget(&s->gb, type, s->le);
-            if (s->subsampling[i] <= 0) {
-                av_log(s->avctx, AV_LOG_ERROR, "subsampling %d is invalid\n", s->subsampling[i]);
-                return AVERROR_INVALIDDATA;
-            }
-        }
         break;
     case TIFF_T4OPTIONS:
         if (s->compr == TIFF_G3)
@@ -1060,10 +1030,6 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
         ADD_METADATA(count, "ModelTiepointTag", NULL);
         break;
     case TIFF_GEO_KEY_DIRECTORY:
-        if (s->geotag_count) {
-            avpriv_request_sample(s->avctx, "Multiple geo key directories\n");
-            return AVERROR_INVALIDDATA;
-        }
         ADD_METADATA(1, "GeoTIFF_Version", NULL);
         ADD_METADATA(2, "GeoTIFF_Key_Revision", ".");
         s->geotag_count   = ff_tget_short(&s->gb, s->le);
@@ -1071,8 +1037,7 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)
             s->geotag_count = count / 4 - 1;
             av_log(s->avctx, AV_LOG_WARNING, "GeoTIFF key directory buffer shorter than specified\n");
         }
-        if (   bytestream2_get_bytes_left(&s->gb) < s->geotag_count * sizeof(int16_t) * 4
-            || s->geotag_count == 0) {
+        if (bytestream2_get_bytes_left(&s->gb) < s->geotag_count * sizeof(int16_t) * 4) {
             s->geotag_count = 0;
             return -1;
         }
@@ -1288,7 +1253,7 @@ static int decode_frame(AVCodecContext *avctx,
                          avpkt->size - s->strippos);
     }
 
-    if (s->rps <= 0 || s->rps % s->subsampling[1]) {
+    if (s->rps <= 0) {
         av_log(avctx, AV_LOG_ERROR, "rps %d invalid\n", s->rps);
         return AVERROR_INVALIDDATA;
     }

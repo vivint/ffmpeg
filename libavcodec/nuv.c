@@ -75,12 +75,9 @@ static const uint8_t fallback_cquant[] = {
  */
 static void copy_frame(AVFrame *f, const uint8_t *src, int width, int height)
 {
-    uint8_t *src_data[4];
-    int src_linesize[4];
-    av_image_fill_arrays(src_data, src_linesize, src,
-                         f->format, width, height, 1);
-    av_image_copy(f->data, f->linesize, (const uint8_t **)src_data, src_linesize,
-                  f->format, width, height);
+    AVPicture pic;
+    avpicture_fill(&pic, src, AV_PIX_FMT_YUV420P, width, height);
+    av_picture_copy((AVPicture *)f, &pic, AV_PIX_FMT_YUV420P, width, height);
 }
 
 /**
@@ -179,7 +176,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     // codec data (rtjpeg quant tables)
     if (buf[0] == 'D' && buf[1] == 'R') {
         int ret;
-        // Skip the rest of the frame header.
+        // skip rest of the frameheader.
         buf       = &buf[12];
         buf_size -= 12;
         ret       = get_quant(avctx, c, buf, buf_size);
@@ -207,7 +204,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         break;
     }
 retry:
-    // Skip the rest of the frame header.
+    // skip rest of the frameheader.
     buf       = &buf[12];
     buf_size -= 12;
     if (comptype == NUV_RTJPEG_IN_LZO || comptype == NUV_LZO) {

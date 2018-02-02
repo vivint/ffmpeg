@@ -320,7 +320,6 @@ static int parse_cube(AVFilterContext *ctx, FILE *f)
                         struct rgbvec *vec = &lut3d->lut[i][j][k];
 
                         do {
-try_again:
                             NEXT_LINE(0);
                             if (!strncmp(line, "DOMAIN_", 7)) {
                                 float *vals = NULL;
@@ -331,7 +330,7 @@ try_again:
                                 sscanf(line + 11, "%f %f %f", vals, vals + 1, vals + 2);
                                 av_log(ctx, AV_LOG_DEBUG, "min: %f %f %f | max: %f %f %f\n",
                                        min[0], min[1], min[2], max[0], max[1], max[2]);
-                                goto try_again;
+                                continue;
                             }
                         } while (skip_line(line));
                         if (sscanf(line, "%f %f %f", &vec->r, &vec->g, &vec->b) != 3)
@@ -532,7 +531,7 @@ static AVFrame *apply_lut(AVFilterLink *inlink, AVFrame *in)
 
     td.in  = in;
     td.out = out;
-    ctx->internal->execute(ctx, lut3d->interp, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
+    ctx->internal->execute(ctx, lut3d->interp, &td, NULL, FFMIN(outlink->h, ctx->graph->nb_threads));
 
     if (out != in)
         av_frame_free(&in);
@@ -773,8 +772,8 @@ static av_cold void haldclut_uninit(AVFilterContext *ctx)
 }
 
 static const AVOption haldclut_options[] = {
-    { "shortest",   "force termination when the shortest input terminates", OFFSET(dinput.shortest),   AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, FLAGS },
-    { "repeatlast", "continue applying the last clut after eos",            OFFSET(dinput.repeatlast), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, FLAGS },
+    { "shortest",   "force termination when the shortest input terminates", OFFSET(dinput.shortest),   AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, FLAGS },
+    { "repeatlast", "continue applying the last clut after eos",            OFFSET(dinput.repeatlast), AV_OPT_TYPE_INT, { .i64 = 1 }, 0, 1, FLAGS },
     COMMON_OPTIONS
 };
 

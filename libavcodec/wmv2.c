@@ -25,7 +25,6 @@
 #include "msmpeg4data.h"
 #include "simple_idct.h"
 #include "wmv2.h"
-#include "wmv2data.h"
 
 
 av_cold void ff_wmv2_common_init(Wmv2Context *w)

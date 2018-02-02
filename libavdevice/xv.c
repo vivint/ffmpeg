@@ -109,22 +109,22 @@ static int xv_write_header(AVFormatContext *s)
     XColor fgcolor;
     XWindowAttributes window_attrs;
     int num_formats = 0, j, tag, ret;
-    AVCodecParameters *par = s->streams[0]->codecpar;
+    AVCodecContext *encctx = s->streams[0]->codec;
 
     if (   s->nb_streams > 1
-        || par->codec_type != AVMEDIA_TYPE_VIDEO
-        || par->codec_id   != AV_CODEC_ID_RAWVIDEO) {
+        || encctx->codec_type != AVMEDIA_TYPE_VIDEO
+        || encctx->codec_id   != AV_CODEC_ID_RAWVIDEO) {
         av_log(s, AV_LOG_ERROR, "Only supports one rawvideo stream\n");
         return AVERROR(EINVAL);
     }
 
-    if (!(tag = xv_get_tag_from_format(par->format))) {
+    if (!(tag = xv_get_tag_from_format(encctx->pix_fmt))) {
         av_log(s, AV_LOG_ERROR,
                "Unsupported pixel format '%s', only yuv420p, uyvy422, yuyv422 are currently supported\n",
-               av_get_pix_fmt_name(par->format));
+               av_get_pix_fmt_name(encctx->pix_fmt));
         return AVERROR_PATCHWELCOME;
     }
-    xv->image_format = par->format;
+    xv->image_format = encctx->pix_fmt;
 
     xv->display = XOpenDisplay(xv->display_name);
     if (!xv->display) {
@@ -132,12 +132,12 @@ static int xv_write_header(AVFormatContext *s)
         return AVERROR(EINVAL);
     }
 
-    xv->image_width  = par->width;
-    xv->image_height = par->height;
+    xv->image_width  = encctx->width;
+    xv->image_height = encctx->height;
     if (!xv->window_width && !xv->window_height) {
-        AVRational sar = par->sample_aspect_ratio;
-        xv->window_width  = par->width;
-        xv->window_height = par->height;
+        AVRational sar = encctx->sample_aspect_ratio;
+        xv->window_width  = encctx->width;
+        xv->window_height = encctx->height;
         if (sar.num) {
             if (sar.num > sar.den)
                 xv->window_width = av_rescale(xv->window_width, sar.num, sar.den);
@@ -189,14 +189,14 @@ static int xv_write_header(AVFormatContext *s)
     if (j >= num_formats) {
         av_log(s, AV_LOG_ERROR,
                "Device does not support pixel format %s, aborting\n",
-               av_get_pix_fmt_name(par->format));
+               av_get_pix_fmt_name(encctx->pix_fmt));
         ret = AVERROR(EINVAL);
         goto fail;
     }
 
     xv->gc = XCreateGC(xv->display, xv->window, 0, 0);
-    xv->image_width  = par->width;
-    xv->image_height = par->height;
+    xv->image_width  = encctx->width;
+    xv->image_height = encctx->height;
     xv->yuv_image = XvShmCreateImage(xv->display, xv->xv_port, tag, 0,
                                      xv->image_width, xv->image_height, &xv->yuv_shminfo);
     xv->yuv_shminfo.shmid = shmget(IPC_PRIVATE, xv->yuv_image->data_size,
@@ -228,11 +228,11 @@ static void compute_display_area(AVFormatContext *s)
     XVContext *xv = s->priv_data;
     AVRational sar, dar; /* sample and display aspect ratios */
     AVStream *st = s->streams[0];
-    AVCodecParameters *par = st->codecpar;
+    AVCodecContext *encctx = st->codec;
 
     /* compute overlay width and height from the codec context information */
     sar = st->sample_aspect_ratio.num ? st->sample_aspect_ratio : (AVRational){ 1, 1 };
-    dar = av_mul_q(sar, (AVRational){ par->width, par->height });
+    dar = av_mul_q(sar, (AVRational){ encctx->width, encctx->height });
 
     /* we suppose the screen has a 1/1 sample aspect ratio */
     /* fit in the window */
@@ -291,8 +291,7 @@ static int xv_repaint(AVFormatContext *s)
     return 0;
 }
 
-static int write_picture(AVFormatContext *s, uint8_t *input_data[4],
-                         int linesize[4])
+static int write_picture(AVFormatContext *s, AVPicture *pict)
 {
     XVContext *xv = s->priv_data;
     XvImage *img = xv->yuv_image;
@@ -314,20 +313,18 @@ static int write_picture(AVFormatContext *s, uint8_t *input_data[4],
         }
     }
 
-    av_image_copy(data, img->pitches, (const uint8_t **)input_data, linesize,
+    av_image_copy(data, img->pitches, (const uint8_t **)pict->data, pict->linesize,
                   xv->image_format, img->width, img->height);
     return xv_repaint(s);
 }
 
 static int xv_write_packet(AVFormatContext *s, AVPacket *pkt)
 {
-    AVCodecParameters *par = s->streams[0]->codecpar;
-    uint8_t *data[4];
-    int linesize[4];
+    AVPicture pict;
+    AVCodecContext *ctx = s->streams[0]->codec;
 
-    av_image_fill_arrays(data, linesize, pkt->data, par->format,
-                         par->width, par->height, 1);
-    return write_picture(s, data, linesize);
+    avpicture_fill(&pict, pkt->data, ctx->pix_fmt, ctx->width, ctx->height);
+    return write_picture(s, &pict);
 }
 
 static int xv_write_frame(AVFormatContext *s, int stream_index, AVFrame **frame,
@@ -336,7 +333,7 @@ static int xv_write_frame(AVFormatContext *s, int stream_index, AVFrame **frame,
     /* xv_write_header() should have accepted only supported formats */
     if ((flags & AV_WRITE_UNCODED_FRAME_QUERY))
         return 0;
-    return write_picture(s, (*frame)->data, (*frame)->linesize);
+    return write_picture(s, (AVPicture *)*frame);
 }
 
 static int xv_control_message(AVFormatContext *s, int type, void *data, size_t data_size)

@@ -19,9 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVDEVICE_DECKLINK_ENC_H
-#define AVDEVICE_DECKLINK_ENC_H
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,5 +30,3 @@ int ff_decklink_write_trailer(AVFormatContext *avctx);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
-#endif /* AVDEVICE_DECKLINK_ENC_H */

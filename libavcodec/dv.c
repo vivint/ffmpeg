@@ -44,6 +44,7 @@
 #include "avcodec.h"
 #include "dv.h"
 #include "dvdata.h"
+#include "get_bits.h"
 #include "internal.h"
 #include "put_bits.h"
 #include "simple_idct.h"

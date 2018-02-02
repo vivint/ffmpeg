@@ -27,13 +27,8 @@
  * @author Alex Beregszaszi
  */
 
-#include <limits.h>
-
-#include "libavutil/crc.h"
-#include "libavutil/intreadwrite.h"
-#include "libavutil/opt.h"
-
 #define BITSTREAM_READER_LE
+#include <limits.h>
 #include "ttadata.h"
 #include "ttadsp.h"
 #include "avcodec.h"
@@ -41,6 +36,9 @@
 #include "thread.h"
 #include "unary.h"
 #include "internal.h"
+#include "libavutil/crc.h"
+#include "libavutil/intreadwrite.h"
+#include "libavutil/opt.h"
 
 #define FORMAT_SIMPLE    1
 #define FORMAT_ENCRYPTED 2
@@ -314,8 +312,8 @@ static int tta_decode_frame(AVCodecContext *avctx, void *data,
         *p = 1 + ((value >> 1) ^ ((value & 1) - 1));
 
         // run hybrid filter
-        s->dsp.filter_process(filter->qm, filter->dx, filter->dl, &filter->error, p,
-                              filter->shift, filter->round);
+        s->dsp.ttafilter_process_dec(filter->qm, filter->dx, filter->dl, &filter->error, p,
+                                     filter->shift, filter->round);
 
         // fixed order prediction
 #define PRED(x, k) (int32_t)((((uint64_t)(x) << (k)) - (x)) >> (k))

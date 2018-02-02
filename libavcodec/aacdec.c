@@ -42,7 +42,7 @@
 #include "internal.h"
 #include "get_bits.h"
 #include "fft.h"
-#include "mdct15.h"
+#include "imdct15.h"
 #include "lpc.h"
 #include "kbdwin.h"
 #include "sinewin.h"
@@ -50,12 +50,11 @@
 #include "aac.h"
 #include "aactab.h"
 #include "aacdectab.h"
-#include "cbrt_data.h"
+#include "cbrt_tablegen.h"
 #include "sbr.h"
 #include "aacsbr.h"
 #include "mpeg4audio.h"
 #include "aacadtsdec.h"
-#include "profiles.h"
 #include "libavutil/intfloat.h"
 
 #include <errno.h>
@@ -284,35 +283,29 @@ static int latm_decode_audio_specific_config(struct LATMContext *latmctx,
     AACContext *ac        = &latmctx->aac_ctx;
     AVCodecContext *avctx = ac->avctx;
     MPEG4AudioConfig m4ac = { 0 };
-    GetBitContext gbc;
     int config_start_bit  = get_bits_count(gb);
     int sync_extension    = 0;
-    int bits_consumed, esize, i;
+    int bits_consumed, esize;
 
-    if (asclen > 0) {
+    if (asclen) {
         sync_extension = 1;
         asclen         = FFMIN(asclen, get_bits_left(gb));
-        init_get_bits(&gbc, gb->buffer, config_start_bit + asclen);
-        skip_bits_long(&gbc, config_start_bit);
-    } else if (asclen == 0) {
-        gbc = *gb;
-    } else {
-        return AVERROR_INVALIDDATA;
+    } else
+        asclen         = get_bits_left(gb);
+
+    if (config_start_bit % 8) {
+        avpriv_request_sample(latmctx->aac_ctx.avctx,
+                              "Non-byte-aligned audio-specific config");
+        return AVERROR_PATCHWELCOME;
     }
-
-    if (get_bits_left(gb) <= 0)
+    if (asclen <= 0)
         return AVERROR_INVALIDDATA;
+    bits_consumed = decode_audio_specific_config(NULL, avctx, &m4ac,
+                                         gb->buffer + (config_start_bit / 8),
+                                         asclen, sync_extension);
 
-    bits_consumed = decode_audio_specific_config_gb(NULL, avctx, &m4ac,
-                                                    &gbc, config_start_bit,
-                                                    sync_extension);
-
-    if (bits_consumed < config_start_bit)
+    if (bits_consumed < 0)
         return AVERROR_INVALIDDATA;
-    bits_consumed -= config_start_bit;
-
-    if (asclen == 0)
-      asclen = bits_consumed;
 
     if (!latmctx->initialized ||
         ac->oc[1].m4ac.sample_rate != m4ac.sample_rate ||
@@ -325,7 +318,7 @@ static int latm_decode_audio_specific_config(struct LATMContext *latmctx,
         }
         latmctx->initialized = 0;
 
-        esize = (asclen + 7) / 8;
+        esize = (bits_consumed+7) / 8;
 
         if (avctx->extradata_size < esize) {
             av_free(avctx->extradata);
@@ -335,15 +328,12 @@ static int latm_decode_audio_specific_config(struct LATMContext *latmctx,
         }
 
         avctx->extradata_size = esize;
-        gbc = *gb;
-        for (i = 0; i < esize; i++) {
-          avctx->extradata[i] = get_bits(&gbc, 8);
-        }
+        memcpy(avctx->extradata, gb->buffer + (config_start_bit/8), esize);
         memset(avctx->extradata+esize, 0, AV_INPUT_BUFFER_PADDING_SIZE);
     }
-    skip_bits_long(gb, asclen);
+    skip_bits_long(gb, bits_consumed);
 
-    return 0;
+    return bits_consumed;
 }
 
 static int read_stream_mux_config(struct LATMContext *latmctx,
@@ -384,6 +374,8 @@ static int read_stream_mux_config(struct LATMContext *latmctx,
             int ascLen = latm_get_value(gb);
             if ((ret = latm_decode_audio_specific_config(latmctx, gb, ascLen)) < 0)
                 return ret;
+            ascLen -= ret;
+            skip_bits_long(gb, ascLen);
         }
 
         latmctx->frame_length_type = get_bits(gb, 3);
@@ -559,11 +551,10 @@ AVCodec ff_aac_decoder = {
         AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_NONE
     },
     .capabilities    = AV_CODEC_CAP_CHANNEL_CONF | AV_CODEC_CAP_DR1,
-    .caps_internal   = FF_CODEC_CAP_INIT_THREADSAFE,
     .channel_layouts = aac_channel_layout,
     .flush = flush,
     .priv_class      = &aac_decoder_class,
-    .profiles        = NULL_IF_CONFIG_SMALL(ff_aac_profiles),
+    .profiles        = profiles,
 };
 
 /*
@@ -584,8 +575,7 @@ AVCodec ff_aac_latm_decoder = {
         AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_NONE
     },
     .capabilities    = AV_CODEC_CAP_CHANNEL_CONF | AV_CODEC_CAP_DR1,
-    .caps_internal   = FF_CODEC_CAP_INIT_THREADSAFE,
     .channel_layouts = aac_channel_layout,
     .flush = flush,
-    .profiles        = NULL_IF_CONFIG_SMALL(ff_aac_profiles),
+    .profiles        = profiles,
 };

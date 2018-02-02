@@ -37,6 +37,7 @@
 #include "bytestream.h"
 #include "hap.h"
 #include "internal.h"
+#include "memory.h"
 #include "snappy.h"
 #include "texturedsp.h"
 #include "thread.h"
@@ -382,6 +383,9 @@ static av_cold int hap_init(AVCodecContext *avctx)
     avctx->coded_width  = FFALIGN(avctx->width,  TEXTURE_BLOCK_W);
     avctx->coded_height = FFALIGN(avctx->height, TEXTURE_BLOCK_H);
 
+    /* Technically only one mode has alpha, but 32 bits are easier to handle */
+    avctx->pix_fmt = AV_PIX_FMT_RGBA;
+
     ff_texturedsp_init(&ctx->dxtc);
 
     switch (avctx->codec_tag) {
@@ -389,19 +393,16 @@ static av_cold int hap_init(AVCodecContext *avctx)
         texture_name = "DXT1";
         ctx->tex_rat = 8;
         ctx->tex_fun = ctx->dxtc.dxt1_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGB0;
         break;
     case MKTAG('H','a','p','5'):
         texture_name = "DXT5";
         ctx->tex_rat = 16;
         ctx->tex_fun = ctx->dxtc.dxt5_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGBA;
         break;
     case MKTAG('H','a','p','Y'):
         texture_name = "DXT5-YCoCg-scaled";
         ctx->tex_rat = 16;
         ctx->tex_fun = ctx->dxtc.dxt5ys_block;
-        avctx->pix_fmt = AV_PIX_FMT_RGB0;
         break;
     default:
         return AVERROR_DECODER_NOT_FOUND;
@@ -426,7 +427,7 @@ static av_cold int hap_close(AVCodecContext *avctx)
 
 AVCodec ff_hap_decoder = {
     .name           = "hap",
-    .long_name      = NULL_IF_CONFIG_SMALL("Vidvox Hap"),
+    .long_name      = NULL_IF_CONFIG_SMALL("Vidvox Hap decoder"),
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_HAP,
     .init           = hap_init,

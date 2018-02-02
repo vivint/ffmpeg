@@ -109,7 +109,7 @@ static void apply_window(const float *buf, const float *win1,
 }
 
 static void apply_window_mp3(float *in, float *win, int *unused, float *out,
-                             ptrdiff_t incr)
+                             int incr)
 {
     LOCAL_ALIGNED_16(float, suma, [17]);
     LOCAL_ALIGNED_16(float, sumb, [17]);
@@ -241,7 +241,7 @@ DECL_IMDCT_BLOCKS(avx,avx)
 
 av_cold void ff_mpadsp_init_x86(MPADSPContext *s)
 {
-    av_unused int cpu_flags = av_get_cpu_flags();
+    int cpu_flags = av_get_cpu_flags();
 
     int i, j;
     for (j = 0; j < 4; j++) {

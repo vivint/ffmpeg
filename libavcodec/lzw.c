@@ -93,7 +93,7 @@ static int lzw_get_code(struct LZWState * s)
     return c & s->curmask;
 }
 
-int ff_lzw_decode_tail(LZWState *p)
+void ff_lzw_decode_tail(LZWState *p)
 {
     struct LZWState *s = (struct LZWState *)p;
 
@@ -104,7 +104,6 @@ int ff_lzw_decode_tail(LZWState *p)
         }
     }else
         bytestream2_skip(&s->gb, bytestream2_get_bytes_left(&s->gb));
-    return bytestream2_tell(&s->gb);
 }
 
 av_cold void ff_lzw_decode_open(LZWState **p)

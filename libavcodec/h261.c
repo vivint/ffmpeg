@@ -1,5 +1,5 @@
 /*
- * H.261 common code
+ * H261 common code
  * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  * Copyright (c) 2004 Maarten Daniels
  *
@@ -22,7 +22,7 @@
 
 /**
  * @file
- * H.261 codec
+ * h261codec.
  */
 
 #include "avcodec.h"

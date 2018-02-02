@@ -21,6 +21,7 @@
 #include "config.h"
 #include "libavutil/attributes.h"
 #include "libavutil/cpu.h"
+#include "libavutil/x86/asm.h"
 #include "libavutil/x86/cpu.h"
 #include "libavcodec/audiodsp.h"
 
@@ -38,7 +39,7 @@ void ff_vector_clip_int32_int_sse2(int32_t *dst, const int32_t *src,
 void ff_vector_clip_int32_sse4(int32_t *dst, const int32_t *src,
                                int32_t min, int32_t max, unsigned int len);
 void ff_vector_clipf_sse(float *dst, const float *src,
-                         int len, float min, float max);
+                         float min, float max, int len);
 
 av_cold void ff_audiodsp_init_x86(AudioDSPContext *c)
 {

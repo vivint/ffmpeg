@@ -277,24 +277,16 @@ static int request_frame(AVFilterLink *outlink)
     AVFrame *samplesref;
     int i, j;
     int64_t t = av_rescale(eval->n, AV_TIME_BASE, eval->sample_rate);
-    int nb_samples;
 
     if (eval->duration >= 0 && t >= eval->duration)
         return AVERROR_EOF;
 
-    if (eval->duration >= 0) {
-        nb_samples = FFMIN(eval->nb_samples, av_rescale(eval->duration, eval->sample_rate, AV_TIME_BASE) - eval->pts);
-        if (!nb_samples)
-            return AVERROR_EOF;
-    } else {
-        nb_samples = eval->nb_samples;
-    }
-    samplesref = ff_get_audio_buffer(outlink, nb_samples);
+    samplesref = ff_get_audio_buffer(outlink, eval->nb_samples);
     if (!samplesref)
         return AVERROR(ENOMEM);
 
     /* evaluate expression for each single sample and for each channel */
-    for (i = 0; i < nb_samples; i++, eval->n++) {
+    for (i = 0; i < eval->nb_samples; i++, eval->n++) {
         eval->var_values[VAR_N] = eval->n;
         eval->var_values[VAR_T] = eval->var_values[VAR_N] * (double)1/eval->sample_rate;
 
@@ -306,7 +298,7 @@ static int request_frame(AVFilterLink *outlink)
 
     samplesref->pts = eval->pts;
     samplesref->sample_rate = eval->sample_rate;
-    eval->pts += nb_samples;
+    eval->pts += eval->nb_samples;
 
     return ff_filter_frame(outlink, samplesref);
 }
@@ -358,34 +350,36 @@ static int aeval_query_formats(AVFilterContext *ctx)
     static const enum AVSampleFormat sample_fmts[] = {
         AV_SAMPLE_FMT_DBLP, AV_SAMPLE_FMT_NONE
     };
-    int ret;
 
     // inlink supports any channel layout
     layouts = ff_all_channel_counts();
-    if ((ret = ff_channel_layouts_ref(layouts, &inlink->out_channel_layouts)) < 0)
-        return ret;
+    ff_channel_layouts_ref(layouts, &inlink->out_channel_layouts);
 
     if (eval->same_chlayout) {
         layouts = ff_all_channel_counts();
-        if ((ret = ff_set_common_channel_layouts(ctx, layouts)) < 0)
-            return ret;
+        if (!layouts)
+            return AVERROR(ENOMEM);
+            ff_set_common_channel_layouts(ctx, layouts);
     } else {
         // outlink supports only requested output channel layout
         layouts = NULL;
-        if ((ret = ff_add_channel_layout(&layouts,
+        ff_add_channel_layout(&layouts,
                               eval->out_channel_layout ? eval->out_channel_layout :
-                              FF_COUNT2LAYOUT(eval->nb_channels))) < 0)
-            return ret;
-        if ((ret = ff_channel_layouts_ref(layouts, &outlink->in_channel_layouts)) < 0)
-            return ret;
+                              FF_COUNT2LAYOUT(eval->nb_channels));
+        ff_channel_layouts_ref(layouts, &outlink->in_channel_layouts);
     }
 
     formats = ff_make_format_list(sample_fmts);
-    if ((ret = ff_set_common_formats(ctx, formats)) < 0)
-        return ret;
+    if (!formats)
+        return AVERROR(ENOMEM);
+    ff_set_common_formats(ctx, formats);
 
     formats = ff_all_samplerates();
-    return ff_set_common_samplerates(ctx, formats);
+    if (!formats)
+        return AVERROR(ENOMEM);
+    ff_set_common_samplerates(ctx, formats);
+
+    return 0;
 }
 
 static int aeval_config_output(AVFilterLink *outlink)

@@ -1,6 +1,8 @@
 FFmpeg's bug/feature request tracker manual
 =================================================
 
+NOTE: This is a draft.
+
 Overview:
 ---------
 
@@ -20,9 +22,9 @@ a mail for every change to every issue.
 (the above does all work already after light testing)
 
 The subscription URL for the ffmpeg-trac list is:
-https://lists.ffmpeg.org/mailman/listinfo/ffmpeg-trac
+http(s)://lists.ffmpeg.org/mailman/listinfo/ffmpeg-trac
 The URL of the webinterface of the tracker is:
-https://trac.ffmpeg.org
+http(s)://trac.ffmpeg.org
 
 Type:
 -----
@@ -40,15 +42,11 @@ feature request / enhancement
     where the current implementation cannot be considered wrong.
 
 license violation
-    Ticket to keep track of (L)GPL violations of ffmpeg by others.
+    ticket to keep track of (L)GPL violations of ffmpeg by others
 
 sponsoring request
     Developer requests for hardware, software, specifications, money,
     refunds, etc.
-
-task
-    A task/reminder such as setting up a FATE client, adding filters to
-    Trac, etc.
 
 Priority:
 ---------
@@ -68,8 +66,7 @@ important
     don't exist in a past revision or another branch.
 
 normal
-   Default setting. Use this if the bug does not match the other
-   priorities or if you are unsure of what priority to choose.
+
 
 minor
     Bugs about things like spelling errors, "mp2" instead of
@@ -166,23 +163,14 @@ Component:
 avcodec
     issues in libavcodec/*
 
-avdevice
-    issues in libavdevice/*
-
-avfilter
-    issues in libavfilter/*
-
 avformat
     issues in libavformat/*
 
 avutil
     issues in libavutil/*
 
-build system
-    issues in or related to configure/Makefile
-
-documentation
-    issues in or related to doc/*
+regression test
+    issues in tests/*
 
 ffmpeg
     issues in or related to ffmpeg.c
@@ -196,23 +184,11 @@ ffprobe
 ffserver
     issues in or related to ffserver.c
 
-postproc
-    issues in libpostproc/*
+build system
+    issues in or related to configure/Makefile
 
-swresample
-    issues in libswresample/*
-
-swscale
-    issues in libswscale/*
+regression
+    bugs which were not present in a past revision
 
 trac
     issues related to our issue tracker
-
-undetermined
-    default component; choose this if unsure
-
-website
-    issues related to the website
-
-wiki
-    issues related to the wiki

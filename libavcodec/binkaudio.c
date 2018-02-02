@@ -29,15 +29,14 @@
  */
 
 #include "libavutil/channel_layout.h"
-#include "libavutil/intfloat.h"
-
-#define BITSTREAM_READER_LE
 #include "avcodec.h"
-#include "dct.h"
+#define BITSTREAM_READER_LE
 #include "get_bits.h"
-#include "internal.h"
+#include "dct.h"
 #include "rdft.h"
+#include "internal.h"
 #include "wma_freqs.h"
+#include "libavutil/intfloat.h"
 
 static float quant_table[96];
 

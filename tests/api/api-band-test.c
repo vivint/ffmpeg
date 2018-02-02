@@ -67,8 +67,7 @@ static void draw_horiz_band(AVCodecContext *ctx, const AVFrame *fr, int offset[4
 static int video_decode(const char *input_filename)
 {
     AVCodec *codec = NULL;
-    AVCodecContext *ctx= NULL;
-    AVCodecParameters *origin_par = NULL;
+    AVCodecContext *origin_ctx = NULL, *ctx= NULL;
     uint8_t *byte_buffer = NULL;
     AVFrame *fr = NULL;
     AVPacket pkt;
@@ -100,9 +99,9 @@ static int video_decode(const char *input_filename)
       return -1;
     }
 
-    origin_par = fmt_ctx->streams[video_stream]->codecpar;
+    origin_ctx = fmt_ctx->streams[video_stream]->codec;
 
-    codec = avcodec_find_decoder(origin_par->codec_id);
+    codec = avcodec_find_decoder(origin_ctx->codec_id);
     if (!codec) {
         av_log(NULL, AV_LOG_ERROR, "Can't find decoder\n");
         return -1;
@@ -114,7 +113,7 @@ static int video_decode(const char *input_filename)
         return AVERROR(ENOMEM);
     }
 
-    result = avcodec_parameters_to_context(ctx, origin_par);
+    result = avcodec_copy_context(ctx, origin_ctx);
     if (result) {
         av_log(NULL, AV_LOG_ERROR, "Can't copy decoder context\n");
         return result;
@@ -191,12 +190,12 @@ static int video_decode(const char *input_filename)
                     return -1;
                 }
             }
-            av_packet_unref(&pkt);
+            av_free_packet(&pkt);
             av_init_packet(&pkt);
         }
     } while (!end_of_stream || got_frame);
 
-    av_packet_unref(&pkt);
+    av_free_packet(&pkt);
     av_frame_free(&fr);
     avcodec_close(ctx);
     avformat_close_input(&fmt_ctx);

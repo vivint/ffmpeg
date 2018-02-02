@@ -32,11 +32,11 @@
  * The format context private option payload_type overrides both.
  *
  * @param fmt   The context of the format
- * @param par   The codec parameters
+ * @param codec The context of the codec
  * @param idx   The stream index
  * @return The payload type (the 'PT' field in the RTP header).
  */
-int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecParameters *par,
+int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecContext *codec,
                             int idx);
 
 /**
@@ -46,12 +46,12 @@ int ff_rtp_get_payload_type(AVFormatContext *fmt, AVCodecParameters *par,
  * information depending on the payload type; for audio codecs, the
  * channels and sample_rate fields are also filled.
  *
- * @param par The codec parameters
+ * @param codec The context of the codec
  * @param payload_type The payload type (the 'PT' field in the RTP header)
  * @return In case of unknown payload type or dynamic payload type, a
  * negative value is returned; otherwise, 0 is returned
  */
-int ff_rtp_get_codec_info(AVCodecParameters *par, int payload_type);
+int ff_rtp_get_codec_info(AVCodecContext *codec, int payload_type);
 
 /**
  * Return the encoding name (as defined in

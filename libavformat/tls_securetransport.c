@@ -22,7 +22,6 @@
 
 
 #include "avformat.h"
-#include "avio_internal.h"
 #include "internal.h"
 #include "network.h"
 #include "os_support.h"
@@ -81,9 +80,8 @@ static int import_pem(URLContext *h, char *path, CFArrayRef *array)
         goto end;
     }
 
-    if ((ret = ffio_open_whitelist(&s, path, AVIO_FLAG_READ,
-                                   &h->interrupt_callback, NULL,
-                                   h->protocol_whitelist, h->protocol_blacklist)) < 0)
+    if ((ret = avio_open2(&s, path, AVIO_FLAG_READ,
+                          &h->interrupt_callback, NULL)) < 0)
         goto end;
 
     if ((ret = avio_size(s)) < 0)
@@ -352,9 +350,8 @@ static int map_ssl_error(OSStatus status, size_t processed)
 static int tls_read(URLContext *h, uint8_t *buf, int size)
 {
     TLSContext *c = h->priv_data;
-    size_t processed = 0;
-    int ret = SSLRead(c->ssl_context, buf, size, &processed);
-    ret = map_ssl_error(ret, processed);
+    size_t processed;
+    int ret = map_ssl_error(SSLRead(c->ssl_context, buf, size, &processed), processed);
     if (ret > 0)
         return ret;
     if (ret == 0)
@@ -365,20 +362,13 @@ static int tls_read(URLContext *h, uint8_t *buf, int size)
 static int tls_write(URLContext *h, const uint8_t *buf, int size)
 {
     TLSContext *c = h->priv_data;
-    size_t processed = 0;
-    int ret = SSLWrite(c->ssl_context, buf, size, &processed);
-    ret = map_ssl_error(ret, processed);
+    size_t processed;
+    int ret = map_ssl_error(SSLWrite(c->ssl_context, buf, size, &processed), processed);
     if (ret > 0)
         return ret;
     if (ret == 0)
         return AVERROR_EOF;
     return print_tls_error(h, ret);
-}
-
-static int tls_get_file_handle(URLContext *h)
-{
-    TLSContext *c = h->priv_data;
-    return ffurl_get_file_handle(c->tls_shared.tcp);
 }
 
 static const AVOption options[] = {
@@ -393,13 +383,12 @@ static const AVClass tls_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
-const URLProtocol ff_tls_securetransport_protocol = {
+URLProtocol ff_tls_securetransport_protocol = {
     .name           = "tls",
     .url_open2      = tls_open,
     .url_read       = tls_read,
     .url_write      = tls_write,
     .url_close      = tls_close,
-    .url_get_file_handle = tls_get_file_handle,
     .priv_data_size = sizeof(TLSContext),
     .flags          = URL_PROTOCOL_FLAG_NETWORK,
     .priv_data_class = &tls_class,

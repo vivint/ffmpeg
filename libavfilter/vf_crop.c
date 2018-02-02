@@ -82,7 +82,6 @@ typedef struct CropContext {
 
     AVRational out_sar; ///< output sample aspect ratio
     int keep_aspect;    ///< keep display aspect ratio when cropping
-    int exact;          ///< exact cropping, for subsampled formats
 
     int max_step[4];    ///< max pixel step for each plane, expressed as a number of bytes
     int hsub, vsub;     ///< chroma subsampling
@@ -94,14 +93,13 @@ typedef struct CropContext {
 static int query_formats(AVFilterContext *ctx)
 {
     AVFilterFormats *formats = NULL;
-    int fmt, ret;
+    int fmt;
 
     for (fmt = 0; av_pix_fmt_desc_get(fmt); fmt++) {
         const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(fmt);
         if (!(desc->flags & (AV_PIX_FMT_FLAG_HWACCEL | AV_PIX_FMT_FLAG_BITSTREAM)) &&
-            !((desc->log2_chroma_w || desc->log2_chroma_h) && !(desc->flags & AV_PIX_FMT_FLAG_PLANAR)) &&
-            (ret = ff_add_format(&formats, fmt)) < 0)
-            return ret;
+            !((desc->log2_chroma_w || desc->log2_chroma_h) && !(desc->flags & AV_PIX_FMT_FLAG_PLANAR)))
+            ff_add_format(&formats, fmt);
     }
 
     return ff_set_common_formats(ctx, formats);
@@ -127,7 +125,7 @@ static inline int normalize_double(int *n, double d)
         *n = d > INT_MAX ? INT_MAX : INT_MIN;
         ret = AVERROR(EINVAL);
     } else
-        *n = lrint(d);
+        *n = round(d);
 
     return ret;
 }
@@ -185,11 +183,8 @@ static int config_input(AVFilterLink *link)
                s->w_expr, s->h_expr);
         return AVERROR(EINVAL);
     }
-
-    if (!s->exact) {
-        s->w &= ~((1 << s->hsub) - 1);
-        s->h &= ~((1 << s->vsub) - 1);
-    }
+    s->w &= ~((1 << s->hsub) - 1);
+    s->h &= ~((1 << s->vsub) - 1);
 
     av_expr_free(s->x_pexpr);
     av_expr_free(s->y_pexpr);
@@ -223,10 +218,8 @@ static int config_input(AVFilterLink *link)
     /* set default, required in the case the first computed value for x/y is NAN */
     s->x = (link->w - s->w) / 2;
     s->y = (link->h - s->h) / 2;
-    if (!s->exact) {
-        s->x &= ~((1 << s->hsub) - 1);
-        s->y &= ~((1 << s->vsub) - 1);
-    }
+    s->x &= ~((1 << s->hsub) - 1);
+    s->y &= ~((1 << s->vsub) - 1);
     return 0;
 
 fail_expr:
@@ -255,7 +248,7 @@ static int filter_frame(AVFilterLink *link, AVFrame *frame)
     frame->width  = s->w;
     frame->height = s->h;
 
-    s->var_values[VAR_N] = link->frame_count_out;
+    s->var_values[VAR_N] = link->frame_count;
     s->var_values[VAR_T] = frame->pts == AV_NOPTS_VALUE ?
         NAN : frame->pts * av_q2d(link->time_base);
     s->var_values[VAR_POS] = av_frame_get_pkt_pos(frame) == -1 ?
@@ -275,10 +268,8 @@ static int filter_frame(AVFilterLink *link, AVFrame *frame)
         s->x = link->w - s->w;
     if ((unsigned)s->y + (unsigned)s->h > link->h)
         s->y = link->h - s->h;
-    if (!s->exact) {
-        s->x &= ~((1 << s->hsub) - 1);
-        s->y &= ~((1 << s->vsub) - 1);
-    }
+    s->x &= ~((1 << s->hsub) - 1);
+    s->y &= ~((1 << s->vsub) - 1);
 
     av_log(ctx, AV_LOG_TRACE, "n:%d t:%f pos:%f x:%d y:%d x+w:%d y+h:%d\n",
             (int)s->var_values[VAR_N], s->var_values[VAR_T], s->var_values[VAR_POS],
@@ -351,8 +342,7 @@ static const AVOption crop_options[] = {
     { "h",           "set the height crop area expression",  OFFSET(h_expr), AV_OPT_TYPE_STRING, {.str = "ih"}, CHAR_MIN, CHAR_MAX, FLAGS },
     { "x",           "set the x crop area expression",       OFFSET(x_expr), AV_OPT_TYPE_STRING, {.str = "(in_w-out_w)/2"}, CHAR_MIN, CHAR_MAX, FLAGS },
     { "y",           "set the y crop area expression",       OFFSET(y_expr), AV_OPT_TYPE_STRING, {.str = "(in_h-out_h)/2"}, CHAR_MIN, CHAR_MAX, FLAGS },
-    { "keep_aspect", "keep aspect ratio",                    OFFSET(keep_aspect), AV_OPT_TYPE_BOOL, {.i64=0}, 0, 1, FLAGS },
-    { "exact",       "do exact cropping",                    OFFSET(exact),  AV_OPT_TYPE_BOOL, {.i64=0}, 0, 1, FLAGS },
+    { "keep_aspect", "keep aspect ratio",                    OFFSET(keep_aspect), AV_OPT_TYPE_INT, {.i64=0}, 0, 1, FLAGS },
     { NULL }
 };
 

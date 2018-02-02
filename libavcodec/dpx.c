@@ -243,10 +243,6 @@ static int decode_frame(AVCodecContext *avctx,
     case 6080:
         avctx->pix_fmt = AV_PIX_FMT_GRAY8;
         break;
-    case 6121:
-    case 6120:
-        avctx->pix_fmt = AV_PIX_FMT_GRAY12;
-        break;
     case 50081:
     case 50080:
         avctx->pix_fmt = AV_PIX_FMT_RGB24;
@@ -260,20 +256,16 @@ static int decode_frame(AVCodecContext *avctx,
         avctx->pix_fmt = AV_PIX_FMT_RGBA;
         break;
     case 50100:
+    case 51100:
     case 50101:
+    case 51101:
         avctx->pix_fmt = AV_PIX_FMT_GBRP10;
         break;
-    case 51100:
-    case 51101:
-        avctx->pix_fmt = AV_PIX_FMT_GBRAP10;
-        break;
     case 50120:
-    case 50121:
-        avctx->pix_fmt = AV_PIX_FMT_GBRP12;
-        break;
     case 51120:
+    case 50121:
     case 51121:
-        avctx->pix_fmt = AV_PIX_FMT_GBRAP12;
+        avctx->pix_fmt = AV_PIX_FMT_GBRP12;
         break;
     case 6161:
         avctx->pix_fmt = AV_PIX_FMT_GRAY16BE;
@@ -321,10 +313,9 @@ static int decode_frame(AVCodecContext *avctx,
     switch (bits_per_color) {
     case 10:
         for (x = 0; x < avctx->height; x++) {
-            uint16_t *dst[4] = {(uint16_t*)ptr[0],
+            uint16_t *dst[3] = {(uint16_t*)ptr[0],
                                 (uint16_t*)ptr[1],
-                                (uint16_t*)ptr[2],
-                                (uint16_t*)ptr[3]};
+                                (uint16_t*)ptr[2]};
             for (y = 0; y < avctx->width; y++) {
                 *dst[2]++ = read10in32(&buf, &rgbBuffer,
                                        &n_datum, endian);
@@ -332,36 +323,36 @@ static int decode_frame(AVCodecContext *avctx,
                                        &n_datum, endian);
                 *dst[1]++ = read10in32(&buf, &rgbBuffer,
                                        &n_datum, endian);
+                // For 10 bit, ignore alpha
                 if (elements == 4)
-                    *dst[3]++ =
                     read10in32(&buf, &rgbBuffer,
                                &n_datum, endian);
             }
             n_datum = 0;
-            for (i = 0; i < elements; i++)
+            for (i = 0; i < 3; i++)
                 ptr[i] += p->linesize[i];
         }
         break;
     case 12:
         for (x = 0; x < avctx->height; x++) {
-            uint16_t *dst[4] = {(uint16_t*)ptr[0],
+            uint16_t *dst[3] = {(uint16_t*)ptr[0],
                                 (uint16_t*)ptr[1],
-                                (uint16_t*)ptr[2],
-                                (uint16_t*)ptr[3]};
+                                (uint16_t*)ptr[2]};
             for (y = 0; y < avctx->width; y++) {
-                if (elements >= 3)
-                    *dst[2]++ = read16(&buf, endian) >> 4;
+                *dst[2] = read16(&buf, endian) >> 4;
+                dst[2]++;
                 *dst[0] = read16(&buf, endian) >> 4;
                 dst[0]++;
-                if (elements >= 2)
-                    *dst[1]++ = read16(&buf, endian) >> 4;
+                *dst[1] = read16(&buf, endian) >> 4;
+                dst[1]++;
+                // For 12 bit, ignore alpha
                 if (elements == 4)
-                    *dst[3]++ = read16(&buf, endian) >> 4;
+                    buf += 2;
+                // Jump to next aligned position
+                buf += need_align;
             }
-            for (i = 0; i < elements; i++)
+            for (i = 0; i < 3; i++)
                 ptr[i] += p->linesize[i];
-            // Jump to next aligned position
-            buf += need_align;
         }
         break;
     case 16:

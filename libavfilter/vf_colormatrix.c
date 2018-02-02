@@ -40,12 +40,19 @@
 #define NS(n) ((n) < 0 ? (int)((n)*65536.0-0.5+DBL_EPSILON) : (int)((n)*65536.0+0.5))
 #define CB(n) av_clip_uint8(n)
 
-static const double yuv_coeff_luma[5][3] = {
-    { +0.7152, +0.0722, +0.2126 }, // Rec.709 (0)
-    { +0.5900, +0.1100, +0.3000 }, // FCC (1)
-    { +0.5870, +0.1140, +0.2990 }, // Rec.601 (ITU-R BT.470-2/SMPTE 170M) (2)
-    { +0.7010, +0.0870, +0.2120 }, // SMPTE 240M (3)
-    { +0.6780, +0.0593, +0.2627 }, // Rec.2020 (4)
+static const double yuv_coeff[4][3][3] = {
+    { { +0.7152, +0.0722, +0.2126 }, // Rec.709 (0)
+      { -0.3850, +0.5000, -0.1150 },
+      { -0.4540, -0.0460, +0.5000 } },
+    { { +0.5900, +0.1100, +0.3000 }, // FCC (1)
+      { -0.3310, +0.5000, -0.1690 },
+      { -0.4210, -0.0790, +0.5000 } },
+    { { +0.5870, +0.1140, +0.2990 }, // Rec.601 (ITU-R BT.470-2/SMPTE 170M) (2)
+      { -0.3313, +0.5000, -0.1687 },
+      { -0.4187, -0.0813, +0.5000 } },
+    { { +0.7010, +0.0870, +0.2120 }, // SMPTE 240M (3)
+      { -0.3840, +0.5000, -0.1160 },
+      { -0.4450, -0.0550, +0.5000 } },
 };
 
 enum ColorMode {
@@ -54,13 +61,12 @@ enum ColorMode {
     COLOR_MODE_FCC,
     COLOR_MODE_BT601,
     COLOR_MODE_SMPTE240M,
-    COLOR_MODE_BT2020,
     COLOR_MODE_COUNT
 };
 
 typedef struct {
     const AVClass *class;
-    int yuv_convert[25][3][3];
+    int yuv_convert[16][3][3];
     int interlaced;
     int source, dest;        ///< ColorMode
     int mode;
@@ -91,7 +97,6 @@ static const AVOption colormatrix_options[] = {
     { "bt470bg",   "set BT.470 colorspace",      0, AV_OPT_TYPE_CONST, {.i64=COLOR_MODE_BT601},       .flags=FLAGS, .unit="color_mode" },
     { "smpte170m", "set SMTPE-170M colorspace",  0, AV_OPT_TYPE_CONST, {.i64=COLOR_MODE_BT601},       .flags=FLAGS, .unit="color_mode" },
     { "smpte240m", "set SMPTE-240M colorspace",  0, AV_OPT_TYPE_CONST, {.i64=COLOR_MODE_SMPTE240M},   .flags=FLAGS, .unit="color_mode" },
-    { "bt2020",    "set BT.2020 colorspace",     0, AV_OPT_TYPE_CONST, {.i64=COLOR_MODE_BT2020},      .flags=FLAGS, .unit="color_mode" },
     { NULL }
 };
 
@@ -117,7 +122,7 @@ AVFILTER_DEFINE_CLASS(colormatrix);
 #define imh im[2][1]
 #define imi im[2][2]
 
-static void inverse3x3(double im[3][3], double m[3][3])
+static void inverse3x3(double im[3][3], const double m[3][3])
 {
     double det = ma * (me * mi - mf * mh) - mb * (md * mi - mf * mg) + mc * (md * mh - me * mg);
     det = 1.0 / det;
@@ -132,7 +137,7 @@ static void inverse3x3(double im[3][3], double m[3][3])
     imi = det * (ma * me - mb * md);
 }
 
-static void solve_coefficients(double cm[3][3], double rgb[3][3], double yuv[3][3])
+static void solve_coefficients(double cm[3][3], double rgb[3][3], const double yuv[3][3])
 {
     int i, j;
     for (i = 0; i < 3; i++)
@@ -143,29 +148,15 @@ static void solve_coefficients(double cm[3][3], double rgb[3][3], double yuv[3][
 static void calc_coefficients(AVFilterContext *ctx)
 {
     ColorMatrixContext *color = ctx->priv;
-    double yuv_coeff[5][3][3];
-    double rgb_coeffd[5][3][3];
-    double yuv_convertd[25][3][3];
-    double bscale, rscale;
+    double rgb_coeffd[4][3][3];
+    double yuv_convertd[16][3][3];
     int v = 0;
     int i, j, k;
-    for (i = 0; i < 5; i++) {
-        yuv_coeff[i][0][0] = yuv_coeff_luma[i][0];
-        yuv_coeff[i][0][1] = yuv_coeff_luma[i][1];
-        yuv_coeff[i][0][2] = yuv_coeff_luma[i][2];
-        bscale = 0.5 / (yuv_coeff[i][0][1] - 1.0);
-        rscale = 0.5 / (yuv_coeff[i][0][2] - 1.0);
-        yuv_coeff[i][1][0] = bscale * yuv_coeff[i][0][0];
-        yuv_coeff[i][1][1] = 0.5;
-        yuv_coeff[i][1][2] = bscale * yuv_coeff[i][0][2];
-        yuv_coeff[i][2][0] = rscale * yuv_coeff[i][0][0];
-        yuv_coeff[i][2][1] = rscale * yuv_coeff[i][0][1];
-        yuv_coeff[i][2][2] = 0.5;
-    }
-    for (i = 0; i < 5; i++)
+
+    for (i = 0; i < 4; i++)
         inverse3x3(rgb_coeffd[i], yuv_coeff[i]);
-    for (i = 0; i < 5; i++) {
-        for (j = 0; j < 5; j++) {
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
             solve_coefficients(yuv_convertd[v], rgb_coeffd[i], yuv_coeff[j]);
             for (k = 0; k < 3; k++) {
                 color->yuv_convert[v][k][0] = NS(yuv_convertd[v][k][0]);
@@ -181,7 +172,7 @@ static void calc_coefficients(AVFilterContext *ctx)
     }
 }
 
-static const char * const color_modes[] = {"bt709", "fcc", "bt601", "smpte240m", "bt2020"};
+static const char * const color_modes[] = {"bt709", "fcc", "bt601", "smpte240m"};
 
 static av_cold int init(AVFilterContext *ctx)
 {
@@ -444,23 +435,20 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
         case AVCOL_SPC_SMPTE240M : source = COLOR_MODE_SMPTE240M ; break;
         case AVCOL_SPC_BT470BG   : source = COLOR_MODE_BT601     ; break;
         case AVCOL_SPC_SMPTE170M : source = COLOR_MODE_BT601     ; break;
-        case AVCOL_SPC_BT2020_NCL: source = COLOR_MODE_BT2020    ; break;
-        case AVCOL_SPC_BT2020_CL : source = COLOR_MODE_BT2020    ; break;
         default :
             av_log(ctx, AV_LOG_ERROR, "Input frame does not specify a supported colorspace, and none has been specified as source either\n");
             av_frame_free(&out);
             return AVERROR(EINVAL);
         }
-        color->mode = source * 5 + color->dest;
+        color->mode = source * 4 + color->dest;
     } else
-        color->mode = color->source * 5 + color->dest;
+        color->mode = color->source * 4 + color->dest;
 
     switch(color->dest) {
-    case COLOR_MODE_BT709    : av_frame_set_colorspace(out, AVCOL_SPC_BT709)     ; break;
-    case COLOR_MODE_FCC      : av_frame_set_colorspace(out, AVCOL_SPC_FCC)       ; break;
-    case COLOR_MODE_SMPTE240M: av_frame_set_colorspace(out, AVCOL_SPC_SMPTE240M) ; break;
-    case COLOR_MODE_BT601    : av_frame_set_colorspace(out, AVCOL_SPC_BT470BG)   ; break;
-    case COLOR_MODE_BT2020   : av_frame_set_colorspace(out, AVCOL_SPC_BT2020_NCL); break;
+    case COLOR_MODE_BT709    : av_frame_set_colorspace(out, AVCOL_SPC_BT709)    ; break;
+    case COLOR_MODE_FCC      : av_frame_set_colorspace(out, AVCOL_SPC_FCC)      ; break;
+    case COLOR_MODE_SMPTE240M: av_frame_set_colorspace(out, AVCOL_SPC_SMPTE240M); break;
+    case COLOR_MODE_BT601    : av_frame_set_colorspace(out, AVCOL_SPC_BT470BG)  ; break;
     }
 
     td.src = in;
@@ -474,16 +462,16 @@ static int filter_frame(AVFilterLink *link, AVFrame *in)
 
     if (in->format == AV_PIX_FMT_YUV444P)
         ctx->internal->execute(ctx, process_slice_yuv444p, &td, NULL,
-                               FFMIN(in->height, ff_filter_get_nb_threads(ctx)));
+                               FFMIN(in->height, ctx->graph->nb_threads));
     else if (in->format == AV_PIX_FMT_YUV422P)
         ctx->internal->execute(ctx, process_slice_yuv422p, &td, NULL,
-                               FFMIN(in->height, ff_filter_get_nb_threads(ctx)));
+                               FFMIN(in->height, ctx->graph->nb_threads));
     else if (in->format == AV_PIX_FMT_YUV420P)
         ctx->internal->execute(ctx, process_slice_yuv420p, &td, NULL,
-                               FFMIN(in->height / 2, ff_filter_get_nb_threads(ctx)));
+                               FFMIN(in->height / 2, ctx->graph->nb_threads));
     else
         ctx->internal->execute(ctx, process_slice_uyvy422, &td, NULL,
-                               FFMIN(in->height, ff_filter_get_nb_threads(ctx)));
+                               FFMIN(in->height, ctx->graph->nb_threads));
 
     av_frame_free(&in);
     return ff_filter_frame(outlink, out);

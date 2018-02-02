@@ -20,7 +20,6 @@
  */
 
 #include "libavutil/attributes.h"
-#include "libavutil/ffmath.h"
 
 #include "avcodec.h"
 #include "internal.h"
@@ -33,7 +32,6 @@ static av_cold int encode_init(AVCodecContext *avctx)
     WMACodecContext *s = avctx->priv_data;
     int i, flags1, flags2, block_align;
     uint8_t *extradata;
-    int ret;
 
     s->avctx = avctx;
 
@@ -52,12 +50,12 @@ static av_cold int encode_init(AVCodecContext *avctx)
 
     if (avctx->bit_rate < 24 * 1000) {
         av_log(avctx, AV_LOG_ERROR,
-               "bitrate too low: got %"PRId64", need 24000 or higher\n",
-               (int64_t)avctx->bit_rate);
+               "bitrate too low: got %i, need 24000 or higher\n",
+               avctx->bit_rate);
         return AVERROR(EINVAL);
     }
 
-    /* extract flag info */
+    /* extract flag infos */
     flags1 = 0;
     flags2 = 1;
     if (avctx->codec->id == AV_CODEC_ID_WMAV1) {
@@ -84,8 +82,7 @@ static av_cold int encode_init(AVCodecContext *avctx)
     if (avctx->channels == 2)
         s->ms_stereo = 1;
 
-    if ((ret = ff_wma_init(avctx, flags2)) < 0)
-        return ret;
+    ff_wma_init(avctx, flags2);
 
     /* init MDCT */
     for (i = 0; i < s->nb_block_sizes; i++)
@@ -100,7 +97,7 @@ static av_cold int encode_init(AVCodecContext *avctx)
     return 0;
 }
 
-static int apply_window_and_mdct(AVCodecContext *avctx, const AVFrame *frame)
+static void apply_window_and_mdct(AVCodecContext *avctx, const AVFrame *frame)
 {
     WMACodecContext *s = avctx->priv_data;
     float **audio      = (float **) frame->extended_data;
@@ -119,13 +116,7 @@ static int apply_window_and_mdct(AVCodecContext *avctx, const AVFrame *frame)
                                     win, len);
         s->fdsp->vector_fmul(s->frame_out[ch], s->frame_out[ch], win, len);
         mdct->mdct_calc(mdct, s->coefs[ch], s->output);
-        if (!isfinite(s->coefs[ch][0])) {
-            av_log(avctx, AV_LOG_ERROR, "Input contains NaN/+-Inf\n");
-            return AVERROR(EINVAL);
-        }
     }
-
-    return 0;
 }
 
 // FIXME use for decoding too
@@ -141,7 +132,7 @@ static void init_exp(WMACodecContext *s, int ch, const int *exp_param)
     max_scale = 0;
     while (q < q_end) {
         /* XXX: use a table */
-        v         = ff_exp10(*exp_param++ *(1.0 / 16.0));
+        v         = pow(10, *exp_param++ *(1.0 / 16.0));
         max_scale = FFMAX(max_scale, v);
         n         = *ptr++;
         do {
@@ -236,7 +227,7 @@ static int encode_block(WMACodecContext *s, float (*src_coefs)[BLOCK_MAX_SIZE],
 
             coefs1    = s->coefs1[ch];
             exponents = s->exponents[ch];
-            mult      = ff_exp10(total_gain * 0.05) / s->max_exponent[ch];
+            mult      = pow(10, total_gain * 0.05) / s->max_exponent[ch];
             mult     *= mdct_norm;
             coefs     = src_coefs[ch];
             if (s->use_noise_coding && 0) {
@@ -372,10 +363,7 @@ static int encode_superframe(AVCodecContext *avctx, AVPacket *avpkt,
     s->block_len_bits = s->frame_len_bits; // required by non variable block len
     s->block_len      = 1 << s->block_len_bits;
 
-    ret = apply_window_and_mdct(avctx, frame);
-
-    if (ret < 0)
-        return ret;
+    apply_window_and_mdct(avctx, frame);
 
     if (s->ms_stereo) {
         float a, b;

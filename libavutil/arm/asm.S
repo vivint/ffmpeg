@@ -40,12 +40,6 @@
 #   define FUNC @
 #endif
 
-#if HAVE_AS_FPU_DIRECTIVE
-#   define FPU
-#else
-#   define FPU @
-#endif
-
 #if   HAVE_NEON
         .arch           armv7-a
 #elif HAVE_ARMV6T2
@@ -60,11 +54,11 @@ ELF     .object_arch    armv4
 #endif
 
 #if   HAVE_NEON
-FPU     .fpu            neon
+        .fpu            neon
 ELF     .eabi_attribute 10, 0           @ suppress Tag_FP_arch
 ELF     .eabi_attribute 12, 0           @ suppress Tag_Advanced_SIMD_arch
 #elif HAVE_VFP
-FPU     .fpu            vfp
+        .fpu            vfp
 ELF     .eabi_attribute 10, 0           @ suppress Tag_FP_arch
 #endif
 
@@ -82,9 +76,6 @@ ELF     .section .note.GNU-stack,"",%progbits @ Mark stack as non-executable
         .altmacro
         put_pic         %(.Lpic_idx - 1)
         .noaltmacro
-      .endif
-      .if .Lpic_gp
-        .unreq          gp
       .endif
 ELF     .size   \name, . - \name
 FUNC    .endfunc

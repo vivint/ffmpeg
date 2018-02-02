@@ -19,9 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVFILTER_REMOVEGRAIN_H
-#define AVFILTER_REMOVEGRAIN_H
-
 #include "avfilter.h"
 
 typedef struct RemoveGrainContext {
@@ -41,5 +38,3 @@ typedef struct RemoveGrainContext {
 } RemoveGrainContext;
 
 void ff_removegrain_init_x86(RemoveGrainContext *rg);
-
-#endif /* AVFILTER_REMOVEGRAIN_H */

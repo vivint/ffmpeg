@@ -1,5 +1,5 @@
 /*
- * H.263+ tables
+ * H263+ tables
  *
  * This file is part of FFmpeg.
  *

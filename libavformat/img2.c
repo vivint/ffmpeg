@@ -22,9 +22,13 @@
 
 #include "libavutil/avstring.h"
 #include "internal.h"
-#include "img2.h"
 
-const IdStrMap ff_img_tags[] = {
+typedef struct IdStrMap {
+    enum AVCodecID id;
+    const char *str;
+} IdStrMap;
+
+static const IdStrMap img_tags[] = {
     { AV_CODEC_ID_MJPEG,      "jpeg"     },
     { AV_CODEC_ID_MJPEG,      "jpg"      },
     { AV_CODEC_ID_MJPEG,      "jps"      },
@@ -45,6 +49,7 @@ const IdStrMap ff_img_tags[] = {
     { AV_CODEC_ID_MPEG1VIDEO, "mpg1-img" },
     { AV_CODEC_ID_MPEG2VIDEO, "mpg2-img" },
     { AV_CODEC_ID_MPEG4,      "mpg4-img" },
+    { AV_CODEC_ID_FFV1,       "ffv1-img" },
     { AV_CODEC_ID_RAWVIDEO,   "y"        },
     { AV_CODEC_ID_RAWVIDEO,   "raw"      },
     { AV_CODEC_ID_BMP,        "bmp"      },
@@ -75,13 +80,12 @@ const IdStrMap ff_img_tags[] = {
     { AV_CODEC_ID_V210X,      "yuv10"    },
     { AV_CODEC_ID_WEBP,       "webp"     },
     { AV_CODEC_ID_XBM,        "xbm"      },
-    { AV_CODEC_ID_XPM,        "xpm"      },
     { AV_CODEC_ID_XFACE,      "xface"    },
     { AV_CODEC_ID_XWD,        "xwd"      },
     { AV_CODEC_ID_NONE,       NULL       }
 };
 
-static enum AVCodecID str2id(const IdStrMap *tags, const char *str)
+static enum AVCodecID av_str2id(const IdStrMap *tags, const char *str)
 {
     str = strrchr(str, '.');
     if (!str)
@@ -99,5 +103,5 @@ static enum AVCodecID str2id(const IdStrMap *tags, const char *str)
 
 enum AVCodecID ff_guess_image2_codec(const char *filename)
 {
-    return str2id(ff_img_tags, filename);
+    return av_str2id(img_tags, filename);
 }

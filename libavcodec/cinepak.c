@@ -1,6 +1,6 @@
 /*
  * Cinepak Video Decoder
- * Copyright (C) 2003 The FFmpeg project
+ * Copyright (c) 2003 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -155,8 +155,8 @@ static int cinepak_decode_vectors (CinepakContext *s, cvid_strip *strip,
                 }
             }
         }
-/* to get the correct picture for not-multiple-of-4 cases let us fill each
- * block from the bottom up, thus possibly overwriting the bottommost line
+/* to get the correct picture for not-multiple-of-4 cases let us fill
+ * each block from the bottom up, thus possibly overwriting the top line
  * more than once but ending with the correct data in place
  * (instead of in-loop checking) */
 
@@ -443,13 +443,10 @@ static int cinepak_decode_frame(AVCodecContext *avctx,
         return ret;
 
     if (s->palette_video) {
-        int size;
-        const uint8_t *pal = av_packet_get_side_data(avpkt, AV_PKT_DATA_PALETTE, &size);
-        if (pal && size == AVPALETTE_SIZE) {
+        const uint8_t *pal = av_packet_get_side_data(avpkt, AV_PKT_DATA_PALETTE, NULL);
+        if (pal) {
             s->frame->palette_has_changed = 1;
             memcpy(s->pal, pal, AVPALETTE_SIZE);
-        } else if (pal) {
-            av_log(avctx, AV_LOG_ERROR, "Palette size %d is wrong\n", size);
         }
     }
 

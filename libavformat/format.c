@@ -62,24 +62,20 @@ void av_register_input_format(AVInputFormat *format)
 {
     AVInputFormat **p = last_iformat;
 
-    // Note, format could be added after the first 2 checks but that implies that *p is no longer NULL
-    while(p != &format->next && !format->next && avpriv_atomic_ptr_cas((void * volatile *)p, NULL, format))
+    format->next = NULL;
+    while(*p || avpriv_atomic_ptr_cas((void * volatile *)p, NULL, format))
         p = &(*p)->next;
-
-    if (!format->next)
-        last_iformat = &format->next;
+    last_iformat = &format->next;
 }
 
 void av_register_output_format(AVOutputFormat *format)
 {
     AVOutputFormat **p = last_oformat;
 
-    // Note, format could be added after the first 2 checks but that implies that *p is no longer NULL
-    while(p != &format->next && !format->next && avpriv_atomic_ptr_cas((void * volatile *)p, NULL, format))
+    format->next = NULL;
+    while(*p || avpriv_atomic_ptr_cas((void * volatile *)p, NULL, format))
         p = &(*p)->next;
-
-    if (!format->next)
-        last_oformat = &format->next;
+    last_oformat = &format->next;
 }
 
 int av_match_ext(const char *filename, const char *extensions)
@@ -175,29 +171,21 @@ AVInputFormat *av_probe_input_format3(AVProbeData *pd, int is_opened,
 {
     AVProbeData lpd = *pd;
     AVInputFormat *fmt1 = NULL, *fmt;
-    int score, score_max = 0;
+    int score, nodat = 0, score_max = 0;
     const static uint8_t zerobuffer[AVPROBE_PADDING_SIZE];
-    enum nodat {
-        NO_ID3,
-        ID3_ALMOST_GREATER_PROBE,
-        ID3_GREATER_PROBE,
-        ID3_GREATER_MAX_PROBE,
-    } nodat = NO_ID3;
 
     if (!lpd.buf)
-        lpd.buf = (unsigned char *) zerobuffer;
+        lpd.buf = zerobuffer;
 
     if (lpd.buf_size > 10 && ff_id3v2_match(lpd.buf, ID3v2_DEFAULT_MAGIC)) {
         int id3len = ff_id3v2_tag_len(lpd.buf);
         if (lpd.buf_size > id3len + 16) {
-            if (lpd.buf_size < 2LL*id3len + 16)
-                nodat = ID3_ALMOST_GREATER_PROBE;
             lpd.buf      += id3len;
             lpd.buf_size -= id3len;
         } else if (id3len >= PROBE_BUF_MAX) {
-            nodat = ID3_GREATER_MAX_PROBE;
+            nodat = 2;
         } else
-            nodat = ID3_GREATER_PROBE;
+            nodat = 1;
     }
 
     fmt = NULL;
@@ -210,36 +198,23 @@ AVInputFormat *av_probe_input_format3(AVProbeData *pd, int is_opened,
             if (score)
                 av_log(NULL, AV_LOG_TRACE, "Probing %s score:%d size:%d\n", fmt1->name, score, lpd.buf_size);
             if (fmt1->extensions && av_match_ext(lpd.filename, fmt1->extensions)) {
-                switch (nodat) {
-                case NO_ID3:
-                    score = FFMAX(score, 1);
-                    break;
-                case ID3_GREATER_PROBE:
-                case ID3_ALMOST_GREATER_PROBE:
-                    score = FFMAX(score, AVPROBE_SCORE_EXTENSION / 2 - 1);
-                    break;
-                case ID3_GREATER_MAX_PROBE:
-                    score = FFMAX(score, AVPROBE_SCORE_EXTENSION);
-                    break;
-                }
+                if      (nodat == 0) score = FFMAX(score, 1);
+                else if (nodat == 1) score = FFMAX(score, AVPROBE_SCORE_EXTENSION / 2 - 1);
+                else                 score = FFMAX(score, AVPROBE_SCORE_EXTENSION);
             }
         } else if (fmt1->extensions) {
             if (av_match_ext(lpd.filename, fmt1->extensions))
                 score = AVPROBE_SCORE_EXTENSION;
         }
-        if (av_match_name(lpd.mime_type, fmt1->mime_type)) {
-            if (AVPROBE_SCORE_MIME > score) {
-                av_log(NULL, AV_LOG_DEBUG, "Probing %s score:%d increased to %d due to MIME type\n", fmt1->name, score, AVPROBE_SCORE_MIME);
-                score = AVPROBE_SCORE_MIME;
-            }
-        }
+        if (av_match_name(lpd.mime_type, fmt1->mime_type))
+            score = FFMAX(score, AVPROBE_SCORE_MIME);
         if (score > score_max) {
             score_max = score;
             fmt       = fmt1;
         } else if (score == score_max)
             fmt = NULL;
     }
-    if (nodat == ID3_GREATER_PROBE)
+    if (nodat == 1)
         score_max = FFMIN(AVPROBE_SCORE_EXTENSION / 2 - 1, score_max);
     *score_ret = score_max;
 
@@ -286,13 +261,8 @@ int av_probe_input_buffer2(AVIOContext *pb, AVInputFormat **fmt,
 
     if (pb->av_class) {
         uint8_t *mime_type_opt = NULL;
-        char *semi;
         av_opt_get(pb, "mime_type", AV_OPT_SEARCH_CHILDREN, &mime_type_opt);
         pd.mime_type = (const char *)mime_type_opt;
-        semi = pd.mime_type ? strchr(pd.mime_type, ';') : NULL;
-        if (semi) {
-            *semi = '\0';
-        }
     }
 #if 0
     if (!*fmt && pb->av_class && av_opt_get(pb, "mime_type", AV_OPT_SEARCH_CHILDREN, &mime_type) >= 0 && mime_type) {

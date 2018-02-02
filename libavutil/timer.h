@@ -38,9 +38,7 @@
 
 #include "log.h"
 
-#if   ARCH_AARCH64
-#   include "aarch64/timer.h"
-#elif ARCH_ARM
+#if   ARCH_ARM
 #   include "arm/timer.h"
 #elif ARCH_PPC
 #   include "ppc/timer.h"

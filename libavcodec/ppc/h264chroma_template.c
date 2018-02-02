@@ -111,9 +111,7 @@
 
 #ifdef PREFIX_h264_chroma_mc8_altivec
 static void PREFIX_h264_chroma_mc8_altivec(uint8_t * dst, uint8_t * src,
-                                           ptrdiff_t stride, int h,
-                                           int x, int y)
-{
+                                    int stride, int h, int x, int y) {
     DECLARE_ALIGNED(16, signed int, ABCD)[4] =
                         {((8 - x) * (8 - y)),
                          ((    x) * (8 - y)),
@@ -185,10 +183,7 @@ static void PREFIX_h264_chroma_mc8_altivec(uint8_t * dst, uint8_t * src,
 
 /* this code assume that stride % 16 == 0 */
 #ifdef PREFIX_no_rnd_vc1_chroma_mc8_altivec
-static void PREFIX_no_rnd_vc1_chroma_mc8_altivec(uint8_t *dst, uint8_t *src,
-                                                 ptrdiff_t stride, int h,
-                                                 int x, int y)
-{
+static void PREFIX_no_rnd_vc1_chroma_mc8_altivec(uint8_t * dst, uint8_t * src, int stride, int h, int x, int y) {
    DECLARE_ALIGNED(16, signed int, ABCD)[4] =
                         {((8 - x) * (8 - y)),
                          ((    x) * (8 - y)),

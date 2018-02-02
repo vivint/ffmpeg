@@ -1,6 +1,6 @@
 /*
  * Wing Commander/Xan Video Decoder
- * Copyright (C) 2003 The FFmpeg project
+ * Copyright (c) 2003 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -34,10 +34,9 @@
 
 #include "libavutil/intreadwrite.h"
 #include "libavutil/mem.h"
-
-#define BITSTREAM_READER_LE
 #include "avcodec.h"
 #include "bytestream.h"
+#define BITSTREAM_READER_LE
 #include "get_bits.h"
 #include "internal.h"
 

@@ -23,7 +23,7 @@
 #ifndef AVUTIL_LLS_H
 #define AVUTIL_LLS_H
 
-#include "macros.h"
+#include "common.h"
 #include "mem.h"
 #include "version.h"
 

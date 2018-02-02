@@ -28,6 +28,7 @@
 
 #include "libavutil/attributes.h"
 #include "avcodec.h"
+#include "get_bits.h"
 #include "mpegaudiodsp.h"
 #include "mpegaudio.h"
 

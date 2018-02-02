@@ -196,7 +196,7 @@ typedef struct ProresContext {
     const uint8_t *scantable;
 
     void (*fdct)(FDCTDSPContext *fdsp, const uint16_t *src,
-                 ptrdiff_t linesize, int16_t *block);
+                 int linesize, int16_t *block);
     FDCTDSPContext fdsp;
 
     const AVFrame *pic;
@@ -227,13 +227,13 @@ typedef struct ProresContext {
 } ProresContext;
 
 static void get_slice_data(ProresContext *ctx, const uint16_t *src,
-                           ptrdiff_t linesize, int x, int y, int w, int h,
+                           int linesize, int x, int y, int w, int h,
                            int16_t *blocks, uint16_t *emu_buf,
                            int mbs_per_slice, int blocks_per_mb, int is_chroma)
 {
     const uint16_t *esrc;
     const int mb_width = 4 * blocks_per_mb;
-    ptrdiff_t elinesize;
+    int elinesize;
     int i, j, k;
 
     for (i = 0; i < mbs_per_slice; i++, src += mb_width) {
@@ -298,7 +298,7 @@ static void get_slice_data(ProresContext *ctx, const uint16_t *src,
 }
 
 static void get_alpha_data(ProresContext *ctx, const uint16_t *src,
-                           ptrdiff_t linesize, int x, int y, int w, int h,
+                           int linesize, int x, int y, int w, int h,
                            int16_t *blocks, int mbs_per_slice, int abits)
 {
     const int slice_width = 16 * mbs_per_slice;
@@ -421,7 +421,7 @@ static void encode_acs(PutBitContext *pb, int16_t *blocks,
 }
 
 static int encode_slice_plane(ProresContext *ctx, PutBitContext *pb,
-                              const uint16_t *src, ptrdiff_t linesize,
+                              const uint16_t *src, int linesize,
                               int mbs_per_slice, int16_t *blocks,
                               int blocks_per_mb, int plane_size_factor,
                               const int16_t *qmat)
@@ -514,8 +514,7 @@ static int encode_slice(AVCodecContext *avctx, const AVFrame *pic,
     int total_size = 0;
     const uint16_t *src;
     int slice_width_factor = av_log2(mbs_per_slice);
-    int num_cblocks, pwidth, line_add;
-    ptrdiff_t linesize;
+    int num_cblocks, pwidth, linesize, line_add;
     int plane_factor, is_chroma;
     uint16_t *qmat;
 
@@ -671,7 +670,7 @@ static int estimate_acs(int *error, int16_t *blocks, int blocks_per_slice,
 }
 
 static int estimate_slice_plane(ProresContext *ctx, int *error, int plane,
-                                const uint16_t *src, ptrdiff_t linesize,
+                                const uint16_t *src, int linesize,
                                 int mbs_per_slice,
                                 int blocks_per_mb, int plane_size_factor,
                                 const int16_t *qmat, ProresThreadData *td)
@@ -704,7 +703,7 @@ static int est_alpha_diff(int cur, int prev, int abits)
 }
 
 static int estimate_alpha_plane(ProresContext *ctx, int *error,
-                                const uint16_t *src, ptrdiff_t linesize,
+                                const uint16_t *src, int linesize,
                                 int mbs_per_slice, int quant,
                                 int16_t *blocks)
 {
@@ -1104,7 +1103,7 @@ static av_cold int encode_close(AVCodecContext *avctx)
 }
 
 static void prores_fdct(FDCTDSPContext *fdsp, const uint16_t *src,
-                        ptrdiff_t linesize, int16_t *block)
+                        int linesize, int16_t *block)
 {
     int x, y;
     const uint16_t *tsrc = src;

@@ -64,6 +64,12 @@ static av_cold int init(AVFilterContext *ctx)
     return 0;
 }
 
+static int config_output(AVFilterLink *outlink)
+{
+    outlink->flags |= FF_LINK_FLAG_REQUEST_LOOP;
+    return 0;
+}
+
 static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 {
     AVFilterContext *ctx = inlink->dst;
@@ -122,6 +128,7 @@ static const AVFilterPad random_outputs[] = {
         .name          = "default",
         .type          = AVMEDIA_TYPE_VIDEO,
         .request_frame = request_frame,
+        .config_props  = config_output,
     },
     { NULL }
 };

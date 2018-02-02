@@ -37,12 +37,6 @@ int avpriv_mpegaudio_decode_header(MPADecodeHeader *s, uint32_t header)
 {
     int sample_rate, frame_size, mpeg25, padding;
     int sample_rate_index, bitrate_index;
-    int ret;
-
-    ret = ff_mpa_check_header(header);
-    if (ret < 0)
-        return ret;
-
     if (header & (1<<20)) {
         s->lsf = (header & (1<<19)) ? 0 : 1;
         mpeg25 = 0;
@@ -119,9 +113,12 @@ int avpriv_mpegaudio_decode_header(MPADecodeHeader *s, uint32_t header)
     return 0;
 }
 
-int ff_mpa_decode_header(uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate, enum AVCodecID *codec_id)
+int avpriv_mpa_decode_header2(uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate, enum AVCodecID *codec_id)
 {
     MPADecodeHeader s1, *s = &s1;
+
+    if (ff_mpa_check_header(head) != 0)
+        return -1;
 
     if (avpriv_mpegaudio_decode_header(s, head) != 0) {
         return -1;
@@ -153,14 +150,7 @@ int ff_mpa_decode_header(uint32_t head, int *sample_rate, int *channels, int *fr
     return s->frame_size;
 }
 
-#if LIBAVCODEC_VERSION_MAJOR < 58
-int avpriv_mpa_decode_header2(uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate, enum AVCodecID *codec_id)
-{
-    return ff_mpa_decode_header(head, sample_rate, channels, frame_size, bit_rate, codec_id);
-}
-
 int avpriv_mpa_decode_header(AVCodecContext *avctx, uint32_t head, int *sample_rate, int *channels, int *frame_size, int *bit_rate)
 {
-    return ff_mpa_decode_header(head, sample_rate, channels, frame_size, bit_rate, &avctx->codec_id);
+    return avpriv_mpa_decode_header2(head, sample_rate, channels, frame_size, bit_rate, &avctx->codec_id);
 }
-#endif

@@ -55,20 +55,20 @@ static int amr_handle_packet(AVFormatContext *ctx, PayloadContext *data,
     const uint8_t *speech_data;
     uint8_t *ptr;
 
-    if (st->codecpar->codec_id == AV_CODEC_ID_AMR_NB) {
+    if (st->codec->codec_id == AV_CODEC_ID_AMR_NB) {
         frame_sizes = frame_sizes_nb;
-    } else if (st->codecpar->codec_id == AV_CODEC_ID_AMR_WB) {
+    } else if (st->codec->codec_id == AV_CODEC_ID_AMR_WB) {
         frame_sizes = frame_sizes_wb;
     } else {
         av_log(ctx, AV_LOG_ERROR, "Bad codec ID\n");
         return AVERROR_INVALIDDATA;
     }
 
-    if (st->codecpar->channels != 1) {
+    if (st->codec->channels != 1) {
         av_log(ctx, AV_LOG_ERROR, "Only mono AMR is supported\n");
         return AVERROR_INVALIDDATA;
     }
-    st->codecpar->channel_layout = AV_CH_LAYOUT_MONO;
+    st->codec->channel_layout = AV_CH_LAYOUT_MONO;
 
     /* The AMR RTP packet consists of one header byte, followed
      * by one TOC byte for each AMR frame in the packet, followed

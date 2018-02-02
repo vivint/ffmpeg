@@ -289,26 +289,20 @@ static int channelmap_query_formats(AVFilterContext *ctx)
     ChannelMapContext *s = ctx->priv;
     AVFilterChannelLayouts *layouts;
     AVFilterChannelLayouts *channel_layouts = NULL;
-    int ret;
 
-    layouts = ff_all_channel_counts();
-    if (!layouts) {
-        ret = AVERROR(ENOMEM);
-        goto fail;
-    }
-    if ((ret = ff_add_channel_layout     (&channel_layouts, s->output_layout                    )) < 0 ||
-        (ret = ff_set_common_formats     (ctx             , ff_planar_sample_fmts()             )) < 0 ||
-        (ret = ff_set_common_samplerates (ctx             , ff_all_samplerates()                )) < 0 ||
-        (ret = ff_channel_layouts_ref    (layouts         , &ctx->inputs[0]->out_channel_layouts)) < 0 ||
-        (ret = ff_channel_layouts_ref    (channel_layouts , &ctx->outputs[0]->in_channel_layouts)) < 0)
-            goto fail;
+    layouts = ff_all_channel_layouts();
+    if (!layouts)
+        return AVERROR(ENOMEM);
+
+    ff_add_channel_layout(&channel_layouts, s->output_layout);
+
+    ff_set_common_formats(ctx, ff_planar_sample_fmts());
+    ff_set_common_samplerates(ctx, ff_all_samplerates());
+
+    ff_channel_layouts_ref(layouts, &ctx->inputs[0]->out_channel_layouts);
+    ff_channel_layouts_ref(channel_layouts,          &ctx->outputs[0]->in_channel_layouts);
 
     return 0;
-fail:
-    if (layouts)
-        av_freep(&layouts->channel_layouts);
-    av_freep(&layouts);
-    return ret;
 }
 
 static int channelmap_filter_frame(AVFilterLink *inlink, AVFrame *buf)
@@ -316,7 +310,7 @@ static int channelmap_filter_frame(AVFilterLink *inlink, AVFrame *buf)
     AVFilterContext  *ctx = inlink->dst;
     AVFilterLink *outlink = ctx->outputs[0];
     const ChannelMapContext *s = ctx->priv;
-    const int nch_in = inlink->channels;
+    const int nch_in = av_get_channel_layout_nb_channels(inlink->channel_layout);
     const int nch_out = s->nch;
     int ch;
     uint8_t *source_planes[MAX_CH];
@@ -363,7 +357,7 @@ static int channelmap_config_input(AVFilterLink *inlink)
 {
     AVFilterContext *ctx = inlink->dst;
     ChannelMapContext *s = ctx->priv;
-    int nb_channels = inlink->channels;
+    int nb_channels = av_get_channel_layout_nb_channels(inlink->channel_layout);
     int i, err = 0;
     const char *channel_name;
     char layout_name[256];
@@ -378,7 +372,7 @@ static int channelmap_config_input(AVFilterLink *inlink)
 
         if (m->in_channel_idx < 0 || m->in_channel_idx >= nb_channels) {
             av_get_channel_layout_string(layout_name, sizeof(layout_name),
-                                         nb_channels, inlink->channel_layout);
+                                         0, inlink->channel_layout);
             if (m->in_channel) {
                 channel_name = av_get_channel_name(m->in_channel);
                 av_log(ctx, AV_LOG_ERROR,

@@ -23,7 +23,7 @@
 #include "asm.h"
 
 static void get_pixels_mvi(int16_t *restrict block,
-                           const uint8_t *restrict pixels, ptrdiff_t stride)
+                           const uint8_t *restrict pixels, ptrdiff_t line_size)
 {
     int h = 8;
 
@@ -34,14 +34,13 @@ static void get_pixels_mvi(int16_t *restrict block,
         stq(unpkbw(p),       block);
         stq(unpkbw(p >> 32), block + 4);
 
-        pixels += stride;
+        pixels += line_size;
         block += 8;
     } while (--h);
 }
 
 static void diff_pixels_mvi(int16_t *block, const uint8_t *s1, const uint8_t *s2,
-                            ptrdiff_t stride)
-{
+                            int stride) {
     int h = 8;
     uint64_t mask = 0x4040;
 

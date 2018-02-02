@@ -17,6 +17,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ *
  */
 
 #include "libavutil/avassert.h"
@@ -131,41 +132,41 @@ static av_cold int hevc_parse_sdp_line(AVFormatContext *ctx, int st_index,
                                        PayloadContext *hevc_data, const char *line)
 {
     AVStream *current_stream;
-    AVCodecParameters *par;
+    AVCodecContext *codec;
     const char *sdp_line_ptr = line;
 
     if (st_index < 0)
         return 0;
 
     current_stream = ctx->streams[st_index];
-    par  = current_stream->codecpar;
+    codec  = current_stream->codec;
 
     if (av_strstart(sdp_line_ptr, "framesize:", &sdp_line_ptr)) {
-        ff_h264_parse_framesize(par, sdp_line_ptr);
+        ff_h264_parse_framesize(codec, sdp_line_ptr);
     } else if (av_strstart(sdp_line_ptr, "fmtp:", &sdp_line_ptr)) {
         int ret = ff_parse_fmtp(ctx, current_stream, hevc_data, sdp_line_ptr,
                                 hevc_sdp_parse_fmtp_config);
         if (hevc_data->vps_size || hevc_data->sps_size ||
             hevc_data->pps_size || hevc_data->sei_size) {
-            av_freep(&par->extradata);
-            par->extradata_size = hevc_data->vps_size + hevc_data->sps_size +
-                                  hevc_data->pps_size + hevc_data->sei_size;
-            par->extradata = av_malloc(par->extradata_size +
-                                       AV_INPUT_BUFFER_PADDING_SIZE);
-            if (!par->extradata) {
+            av_freep(&codec->extradata);
+            codec->extradata_size = hevc_data->vps_size + hevc_data->sps_size +
+                                    hevc_data->pps_size + hevc_data->sei_size;
+            codec->extradata = av_malloc(codec->extradata_size +
+                                         AV_INPUT_BUFFER_PADDING_SIZE);
+            if (!codec->extradata) {
                 ret = AVERROR(ENOMEM);
-                par->extradata_size = 0;
+                codec->extradata_size = 0;
             } else {
                 int pos = 0;
-                memcpy(par->extradata + pos, hevc_data->vps, hevc_data->vps_size);
+                memcpy(codec->extradata + pos, hevc_data->vps, hevc_data->vps_size);
                 pos += hevc_data->vps_size;
-                memcpy(par->extradata + pos, hevc_data->sps, hevc_data->sps_size);
+                memcpy(codec->extradata + pos, hevc_data->sps, hevc_data->sps_size);
                 pos += hevc_data->sps_size;
-                memcpy(par->extradata + pos, hevc_data->pps, hevc_data->pps_size);
+                memcpy(codec->extradata + pos, hevc_data->pps, hevc_data->pps_size);
                 pos += hevc_data->pps_size;
-                memcpy(par->extradata + pos, hevc_data->sei, hevc_data->sei_size);
+                memcpy(codec->extradata + pos, hevc_data->sei, hevc_data->sei_size);
                 pos += hevc_data->sei_size;
-                memset(par->extradata + pos, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+                memset(codec->extradata + pos, 0, AV_INPUT_BUFFER_PADDING_SIZE);
             }
 
             av_freep(&hevc_data->vps);
@@ -221,7 +222,7 @@ static int hevc_handle_packet(AVFormatContext *ctx, PayloadContext *rtp_hevc_ctx
     /* sanity check for correct layer ID */
     if (lid) {
         /* future scalable or 3D video coding extensions */
-        avpriv_report_missing_feature(ctx, "Multi-layer HEVC coding");
+        avpriv_report_missing_feature(ctx, "Multi-layer HEVC coding\n");
         return AVERROR_PATCHWELCOME;
     }
 
@@ -337,7 +338,7 @@ static int hevc_handle_packet(AVFormatContext *ctx, PayloadContext *rtp_hevc_ctx
     /* PACI packet */
     case 50:
         /* Temporal scalability control information (TSCI) */
-        avpriv_report_missing_feature(ctx, "PACI packets for RTP/HEVC");
+        avpriv_report_missing_feature(ctx, "PACI packets for RTP/HEVC\n");
         res = AVERROR_PATCHWELCOME;
         break;
     }

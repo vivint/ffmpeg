@@ -22,7 +22,7 @@
 
 /**
  * @file
- * Cook AKA RealAudio G2 compatible decoder data
+ * Cook AKA RealAudio G2 compatible decoderdata
  */
 
 #ifndef AVCODEC_COOKDATA_H

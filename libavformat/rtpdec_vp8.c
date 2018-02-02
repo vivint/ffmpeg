@@ -46,7 +46,7 @@ struct PayloadContext {
     int          prev_pictureid;
     int          broken_frame;
     /* If sequence_dirty is set, we have lost some data (critical or
-     * non-critical) and decoding will have some sort of artifacts, and
+     * non-critical) and decoding will have some sort of artefacts, and
      * we thus should request a new keyframe.
      */
     int          sequence_dirty;

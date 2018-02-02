@@ -1,4 +1,5 @@
 /*
+ *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -111,8 +112,6 @@ void ffio_init_checksum(AVIOContext *s,
 unsigned long ffio_get_checksum(AVIOContext *s);
 unsigned long ff_crc04C11DB7_update(unsigned long checksum, const uint8_t *buf,
                                     unsigned int len);
-unsigned long ff_crcEDB88320_update(unsigned long checksum, const uint8_t *buf,
-                                    unsigned int len);
 unsigned long ff_crcA001_update(unsigned long checksum, const uint8_t *buf,
                                 unsigned int len);
 
@@ -149,10 +148,6 @@ int ffio_fdopen(AVIOContext **s, URLContext *h);
  * @return zero if no error.
  */
 int ffio_open_null_buf(AVIOContext **s);
-
-int ffio_open_whitelist(AVIOContext **s, const char *url, int flags,
-                         const AVIOInterruptCB *int_cb, AVDictionary **options,
-                         const char *whitelist, const char *blacklist);
 
 /**
  * Close a null buffer.

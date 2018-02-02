@@ -4,7 +4,6 @@ include config.mak
 vpath %.c    $(SRC_PATH)
 vpath %.cpp  $(SRC_PATH)
 vpath %.h    $(SRC_PATH)
-vpath %.inc  $(SRC_PATH)
 vpath %.m    $(SRC_PATH)
 vpath %.S    $(SRC_PATH)
 vpath %.asm  $(SRC_PATH)
@@ -30,18 +29,15 @@ $(foreach prog,$(AVBASENAMES),$(eval OBJS-$(prog) += cmdutils.o))
 $(foreach prog,$(AVBASENAMES),$(eval OBJS-$(prog)-$(CONFIG_OPENCL) += cmdutils_opencl.o))
 
 OBJS-ffmpeg                   += ffmpeg_opt.o ffmpeg_filter.o
-OBJS-ffmpeg-$(CONFIG_VIDEOTOOLBOX) += ffmpeg_videotoolbox.o
-OBJS-ffmpeg-$(CONFIG_LIBMFX)  += ffmpeg_qsv.o
-OBJS-ffmpeg-$(CONFIG_VAAPI)   += ffmpeg_vaapi.o
+OBJS-ffmpeg-$(HAVE_VDPAU_X11) += ffmpeg_vdpau.o
+OBJS-ffmpeg-$(HAVE_DXVA2_LIB) += ffmpeg_dxva2.o
 ifndef CONFIG_VIDEOTOOLBOX
 OBJS-ffmpeg-$(CONFIG_VDA)     += ffmpeg_videotoolbox.o
 endif
-OBJS-ffmpeg-$(CONFIG_CUVID)   += ffmpeg_cuvid.o
-OBJS-ffmpeg-$(HAVE_DXVA2_LIB) += ffmpeg_dxva2.o
-OBJS-ffmpeg-$(HAVE_VDPAU_X11) += ffmpeg_vdpau.o
+OBJS-ffmpeg-$(CONFIG_VIDEOTOOLBOX) += ffmpeg_videotoolbox.o
 OBJS-ffserver                 += ffserver_config.o
 
-TESTTOOLS   = audiogen videogen rotozoom tiny_psnr tiny_ssim base64 audiomatch
+TESTTOOLS   = audiogen videogen rotozoom tiny_psnr tiny_ssim base64
 HOSTPROGS  := $(TESTTOOLS:%=tests/%) doc/print_options
 TOOLS       = qt-faststart trasher uncoded_frame
 TOOLS-$(CONFIG_ZLIB) += cws2fws
@@ -61,8 +57,7 @@ FFLIBS := avutil
 DATA_FILES := $(wildcard $(SRC_PATH)/presets/*.ffpreset) $(SRC_PATH)/doc/ffprobe.xsd
 EXAMPLES_FILES := $(wildcard $(SRC_PATH)/doc/examples/*.c) $(SRC_PATH)/doc/examples/Makefile $(SRC_PATH)/doc/examples/README
 
-SKIPHEADERS = cmdutils_common_opts.h                                    \
-              compat/w32pthreads.h
+SKIPHEADERS = cmdutils_common_opts.h compat/w32pthreads.h
 
 include $(SRC_PATH)/common.mak
 
@@ -79,13 +74,8 @@ tools/cws2fws$(EXESUF): ELIBS = $(ZLIB)
 tools/uncoded_frame$(EXESUF): $(FF_DEP_LIBS)
 tools/uncoded_frame$(EXESUF): ELIBS = $(FF_EXTRALIBS)
 
-CONFIGURABLE_COMPONENTS =                                           \
-    $(wildcard $(FFLIBS:%=$(SRC_PATH)/lib%/all*.c))                 \
-    $(SRC_PATH)/libavcodec/bitstream_filters.c                      \
-    $(SRC_PATH)/libavformat/protocols.c                             \
-
 config.h: .config
-.config: $(CONFIGURABLE_COMPONENTS)
+.config: $(wildcard $(FFLIBS:%=$(SRC_PATH)/lib%/all*.c))
 	@-tput bold 2>/dev/null
 	@-printf '\nWARNING: $(?F) newer than config.h, rerun configure\n\n'
 	@-tput sgr0 2>/dev/null
@@ -93,8 +83,8 @@ config.h: .config
 SUBDIR_VARS := CLEANFILES EXAMPLES FFLIBS HOSTPROGS TESTPROGS TOOLS      \
                HEADERS ARCH_HEADERS BUILT_HEADERS SKIPHEADERS            \
                ARMV5TE-OBJS ARMV6-OBJS ARMV8-OBJS VFP-OBJS NEON-OBJS     \
-               ALTIVEC-OBJS VSX-OBJS MMX-OBJS YASM-OBJS                  \
-               MIPSFPU-OBJS MIPSDSPR2-OBJS MIPSDSP-OBJS MSA-OBJS         \
+               ALTIVEC-OBJS MMX-OBJS YASM-OBJS                           \
+               MIPSFPU-OBJS MIPSDSPR2-OBJS MIPSDSPR1-OBJS MSA-OBJS       \
                MMI-OBJS OBJS SLIBOBJS HOSTOBJS TESTOBJS
 
 define RESET
@@ -156,7 +146,20 @@ ifdef AVPROGS
 install: install-progs install-data
 endif
 
-install: install-libs install-headers
+install-config-header:
+	$(INSTALL) -m 644 $(SRC_PATH)/config.h "$(INCDIR)"
+	$(Q)mkdir -p "$(INCDIR)/libavcodec/arm"
+	$(Q)mkdir -p "$(INCDIR)/libavcodec/avr32"
+	$(Q)mkdir -p "$(INCDIR)/libavcodec/mips"
+	$(Q)mkdir -p "$(INCDIR)/libavcodec/ppc"
+	$(Q)mkdir -p "$(INCDIR)/libavcodec/x86"
+	$(INSTALL) -m 644 $(SRC_PATH)/libavcodec/arm/mathops.h "$(INCDIR)/libavcodec/arm"
+	$(INSTALL) -m 644 $(SRC_PATH)/libavcodec/avr32/mathops.h "$(INCDIR)/libavcodec/avr32"
+	$(INSTALL) -m 644 $(SRC_PATH)/libavcodec/mips/mathops.h "$(INCDIR)/libavcodec/mips"
+	$(INSTALL) -m 644 $(SRC_PATH)/libavcodec/ppc/mathops.h "$(INCDIR)/libavcodec/ppc"
+	$(INSTALL) -m 644 $(SRC_PATH)/libavcodec/x86/mathops.h "$(INCDIR)/libavcodec/x86"
+
+install: install-libs install-headers install-config-header
 
 install-libs: install-libs-yes
 
@@ -184,19 +187,12 @@ clean::
 	$(RM) $(ALLAVPROGS) $(ALLAVPROGS_G)
 	$(RM) $(CLEANSUFFIXES)
 	$(RM) $(CLEANSUFFIXES:%=tools/%)
-	$(RM) $(CLEANSUFFIXES:%=compat/msvcrt/%)
-	$(RM) $(CLEANSUFFIXES:%=compat/atomics/pthread/%)
-	$(RM) $(CLEANSUFFIXES:%=compat/%)
 	$(RM) -r coverage-html
-	$(RM) -rf coverage.info coverage.info.in lcov
+	$(RM) -rf coverage.info lcov
 
 distclean::
 	$(RM) $(DISTCLEANSUFFIXES)
-	$(RM) config.* .config libavutil/avconfig.h .version mapfile avversion.h version.h libavutil/ffversion.h libavcodec/codec_names.h libavcodec/bsf_list.c libavformat/protocol_list.c
-ifeq ($(SRC_LINK),src)
-	$(RM) src
-endif
-	$(RM) -rf doc/examples/pc-uninstalled
+	$(RM) config.* .config libavutil/avconfig.h .version avversion.h version.h libavutil/ffversion.h libavcodec/codec_names.h
 
 config:
 	$(SRC_PATH)/configure $(value FFMPEG_CONFIGURATION)

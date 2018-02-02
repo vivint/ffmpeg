@@ -35,7 +35,6 @@ typedef struct {
     AVFrame *(*process)(AVFilterContext *ctx, AVFrame *main, const AVFrame *second);
     int shortest;               ///< terminate stream when the second input terminates
     int repeatlast;             ///< repeat last second frame
-    int skip_initial_unpaired;  ///< Skip initial frames that do not have a 2nd input
 } FFDualInputContext;
 
 int ff_dualinput_init(AVFilterContext *ctx, FFDualInputContext *s);

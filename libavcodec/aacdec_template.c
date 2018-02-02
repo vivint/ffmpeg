@@ -89,8 +89,6 @@
            Parametric Stereo.
  */
 
-#include "libavutil/thread.h"
-
 static VLC vlc_scalefactors;
 static VLC vlc_spectral[11];
 
@@ -134,7 +132,7 @@ static av_cold int che_configure(AACContext *ac,
         if (!ac->che[type][id]) {
             if (!(ac->che[type][id] = av_mallocz(sizeof(ChannelElement))))
                 return AVERROR(ENOMEM);
-            AAC_RENAME(ff_aac_sbr_ctx_init)(ac, &ac->che[type][id]->sbr, type);
+            AAC_RENAME(ff_aac_sbr_ctx_init)(ac, &ac->che[type][id]->sbr);
         }
         if (type != TYPE_CCE) {
             if (*channels >= MAX_CHANNELS - (type == TYPE_CPE || (type == TYPE_SCE && ac->oc[1].m4ac.ps == 1))) {
@@ -451,10 +449,6 @@ static int output_configure(AACContext *ac,
         int type =         layout_map[i][0];
         int id =           layout_map[i][1];
         id_map[type][id] = type_counts[type]++;
-        if (id_map[type][id] >= MAX_ELEM_ID) {
-            avpriv_request_sample(ac->avctx, "Too large remapped id");
-            return AVERROR_PATCHWELCOME;
-        }
     }
     // Try to sniff a reasonable channel order, otherwise output the
     // channels in the order the PCE declared them.
@@ -715,13 +709,6 @@ static void decode_channel_map(uint8_t layout_map[][3],
     }
 }
 
-static inline void relative_align_get_bits(GetBitContext *gb,
-                                           int reference_position) {
-    int n = (reference_position - get_bits_count(gb) & 7);
-    if (n)
-        skip_bits(gb, n);
-}
-
 /**
  * Decode program configuration element; reference: table 4.2.
  *
@@ -729,7 +716,7 @@ static inline void relative_align_get_bits(GetBitContext *gb,
  */
 static int decode_pce(AVCodecContext *avctx, MPEG4AudioConfig *m4ac,
                       uint8_t (*layout_map)[3],
-                      GetBitContext *gb, int byte_align_ref)
+                      GetBitContext *gb)
 {
     int num_front, num_side, num_back, num_lfe, num_assoc_data, num_cc;
     int sampling_index;
@@ -777,7 +764,7 @@ static int decode_pce(AVCodecContext *avctx, MPEG4AudioConfig *m4ac,
     decode_channel_map(layout_map + tags, AAC_CHANNEL_CC,    gb, num_cc);
     tags += num_cc;
 
-    relative_align_get_bits(gb, byte_align_ref);
+    align_get_bits(gb);
 
     /* comment field, first byte is length */
     comment_len = get_bits(gb, 8) * 8;
@@ -799,7 +786,6 @@ static int decode_pce(AVCodecContext *avctx, MPEG4AudioConfig *m4ac,
  */
 static int decode_ga_specific_config(AACContext *ac, AVCodecContext *avctx,
                                      GetBitContext *gb,
-                                     int get_bit_alignment,
                                      MPEG4AudioConfig *m4ac,
                                      int channel_config)
 {
@@ -823,7 +809,7 @@ static int decode_ga_specific_config(AACContext *ac, AVCodecContext *avctx,
 
     if (channel_config == 0) {
         skip_bits(gb, 4);  // element_instance_tag
-        tags = decode_pce(avctx, m4ac, layout_map, gb, get_bit_alignment);
+        tags = decode_pce(avctx, m4ac, layout_map, gb);
         if (tags < 0)
             return tags;
     } else {
@@ -945,25 +931,37 @@ static int decode_eld_specific_config(AACContext *ac, AVCodecContext *avctx,
  * @param   ac          pointer to AACContext, may be null
  * @param   avctx       pointer to AVCCodecContext, used for logging
  * @param   m4ac        pointer to MPEG4AudioConfig, used for parsing
- * @param   gb          buffer holding an audio specific config
- * @param   get_bit_alignment relative alignment for byte align operations
+ * @param   data        pointer to buffer holding an audio specific config
+ * @param   bit_size    size of audio specific config or data in bits
  * @param   sync_extension look for an appended sync extension
  *
  * @return  Returns error status or number of consumed bits. <0 - error
  */
-static int decode_audio_specific_config_gb(AACContext *ac,
-                                           AVCodecContext *avctx,
-                                           MPEG4AudioConfig *m4ac,
-                                           GetBitContext *gb,
-                                           int get_bit_alignment,
-                                           int sync_extension)
+static int decode_audio_specific_config(AACContext *ac,
+                                        AVCodecContext *avctx,
+                                        MPEG4AudioConfig *m4ac,
+                                        const uint8_t *data, int64_t bit_size,
+                                        int sync_extension)
 {
+    GetBitContext gb;
     int i, ret;
-    GetBitContext gbc = *gb;
 
-    if ((i = ff_mpeg4audio_get_config_gb(m4ac, &gbc, sync_extension)) < 0)
+    if (bit_size < 0 || bit_size > INT_MAX) {
+        av_log(avctx, AV_LOG_ERROR, "Audio specific config size is invalid\n");
         return AVERROR_INVALIDDATA;
+    }
 
+    ff_dlog(avctx, "audio specific config size %d\n", (int)bit_size >> 3);
+    for (i = 0; i < bit_size >> 3; i++)
+        ff_dlog(avctx, "%02x ", data[i]);
+    ff_dlog(avctx, "\n");
+
+    if ((ret = init_get_bits(&gb, data, bit_size)) < 0)
+        return ret;
+
+    if ((i = avpriv_mpeg4audio_get_config(m4ac, data, bit_size,
+                                          sync_extension)) < 0)
+        return AVERROR_INVALIDDATA;
     if (m4ac->sampling_index > 12) {
         av_log(avctx, AV_LOG_ERROR,
                "invalid sampling rate index %d\n",
@@ -978,7 +976,7 @@ static int decode_audio_specific_config_gb(AACContext *ac,
         return AVERROR_INVALIDDATA;
     }
 
-    skip_bits_long(gb, i);
+    skip_bits_long(&gb, i);
 
     switch (m4ac->object_type) {
     case AOT_AAC_MAIN:
@@ -986,12 +984,12 @@ static int decode_audio_specific_config_gb(AACContext *ac,
     case AOT_AAC_LTP:
     case AOT_ER_AAC_LC:
     case AOT_ER_AAC_LD:
-        if ((ret = decode_ga_specific_config(ac, avctx, gb, get_bit_alignment,
+        if ((ret = decode_ga_specific_config(ac, avctx, &gb,
                                             m4ac, m4ac->chan_config)) < 0)
             return ret;
         break;
     case AOT_ER_AAC_ELD:
-        if ((ret = decode_eld_specific_config(ac, avctx, gb,
+        if ((ret = decode_eld_specific_config(ac, avctx, &gb,
                                               m4ac, m4ac->chan_config)) < 0)
             return ret;
         break;
@@ -1009,33 +1007,7 @@ static int decode_audio_specific_config_gb(AACContext *ac,
             m4ac->sample_rate, m4ac->sbr,
             m4ac->ps);
 
-    return get_bits_count(gb);
-}
-
-static int decode_audio_specific_config(AACContext *ac,
-                                        AVCodecContext *avctx,
-                                        MPEG4AudioConfig *m4ac,
-                                        const uint8_t *data, int64_t bit_size,
-                                        int sync_extension)
-{
-    int i, ret;
-    GetBitContext gb;
-
-    if (bit_size < 0 || bit_size > INT_MAX) {
-        av_log(avctx, AV_LOG_ERROR, "Audio specific config size is invalid\n");
-        return AVERROR_INVALIDDATA;
-    }
-
-    ff_dlog(avctx, "audio specific config size %d\n", (int)bit_size >> 3);
-    for (i = 0; i < bit_size >> 3; i++)
-        ff_dlog(avctx, "%02x ", data[i]);
-    ff_dlog(avctx, "\n");
-
-    if ((ret = init_get_bits(&gb, data, bit_size)) < 0)
-        return ret;
-
-    return decode_audio_specific_config_gb(ac, avctx, m4ac, &gb, 0,
-                                           sync_extension);
+    return get_bits_count(&gb);
 }
 
 /**
@@ -1091,54 +1063,10 @@ static void reset_predictor_group(PredictorState *ps, int group_num)
 
 static void aacdec_init(AACContext *ac);
 
-static av_cold void aac_static_table_init(void)
-{
-    AAC_INIT_VLC_STATIC( 0, 304);
-    AAC_INIT_VLC_STATIC( 1, 270);
-    AAC_INIT_VLC_STATIC( 2, 550);
-    AAC_INIT_VLC_STATIC( 3, 300);
-    AAC_INIT_VLC_STATIC( 4, 328);
-    AAC_INIT_VLC_STATIC( 5, 294);
-    AAC_INIT_VLC_STATIC( 6, 306);
-    AAC_INIT_VLC_STATIC( 7, 268);
-    AAC_INIT_VLC_STATIC( 8, 510);
-    AAC_INIT_VLC_STATIC( 9, 366);
-    AAC_INIT_VLC_STATIC(10, 462);
-
-    AAC_RENAME(ff_aac_sbr_init)();
-
-    ff_aac_tableinit();
-
-    INIT_VLC_STATIC(&vlc_scalefactors, 7,
-                    FF_ARRAY_ELEMS(ff_aac_scalefactor_code),
-                    ff_aac_scalefactor_bits,
-                    sizeof(ff_aac_scalefactor_bits[0]),
-                    sizeof(ff_aac_scalefactor_bits[0]),
-                    ff_aac_scalefactor_code,
-                    sizeof(ff_aac_scalefactor_code[0]),
-                    sizeof(ff_aac_scalefactor_code[0]),
-                    352);
-
-    // window initialization
-    AAC_RENAME(ff_kbd_window_init)(AAC_RENAME(ff_aac_kbd_long_1024), 4.0, 1024);
-    AAC_RENAME(ff_kbd_window_init)(AAC_RENAME(ff_aac_kbd_short_128), 6.0, 128);
-    AAC_RENAME(ff_init_ff_sine_windows)(10);
-    AAC_RENAME(ff_init_ff_sine_windows)( 9);
-    AAC_RENAME(ff_init_ff_sine_windows)( 7);
-
-    AAC_RENAME(ff_cbrt_tableinit)();
-}
-
-static AVOnce aac_table_init = AV_ONCE_INIT;
-
 static av_cold int aac_decode_init(AVCodecContext *avctx)
 {
     AACContext *ac = avctx->priv_data;
     int ret;
-
-    ret = ff_thread_once(&aac_table_init, &aac_static_table_init);
-    if (ret != 0)
-        return AVERROR_UNKNOWN;
 
     ac->avctx = avctx;
     ac->oc[1].m4ac.sample_rate = avctx->sample_rate;
@@ -1191,6 +1119,20 @@ static av_cold int aac_decode_init(AVCodecContext *avctx)
         return AVERROR_INVALIDDATA;
     }
 
+    AAC_INIT_VLC_STATIC( 0, 304);
+    AAC_INIT_VLC_STATIC( 1, 270);
+    AAC_INIT_VLC_STATIC( 2, 550);
+    AAC_INIT_VLC_STATIC( 3, 300);
+    AAC_INIT_VLC_STATIC( 4, 328);
+    AAC_INIT_VLC_STATIC( 5, 294);
+    AAC_INIT_VLC_STATIC( 6, 306);
+    AAC_INIT_VLC_STATIC( 7, 268);
+    AAC_INIT_VLC_STATIC( 8, 510);
+    AAC_INIT_VLC_STATIC( 9, 366);
+    AAC_INIT_VLC_STATIC(10, 462);
+
+    AAC_RENAME(ff_aac_sbr_init)();
+
 #if USE_FIXED
     ac->fdsp = avpriv_alloc_fixed_dsp(avctx->flags & AV_CODEC_FLAG_BITEXACT);
 #else
@@ -1202,15 +1144,35 @@ static av_cold int aac_decode_init(AVCodecContext *avctx)
 
     ac->random_state = 0x1f2e3d4c;
 
+    ff_aac_tableinit();
+
+    INIT_VLC_STATIC(&vlc_scalefactors, 7,
+                    FF_ARRAY_ELEMS(ff_aac_scalefactor_code),
+                    ff_aac_scalefactor_bits,
+                    sizeof(ff_aac_scalefactor_bits[0]),
+                    sizeof(ff_aac_scalefactor_bits[0]),
+                    ff_aac_scalefactor_code,
+                    sizeof(ff_aac_scalefactor_code[0]),
+                    sizeof(ff_aac_scalefactor_code[0]),
+                    352);
+
     AAC_RENAME_32(ff_mdct_init)(&ac->mdct,       11, 1, 1.0 / RANGE15(1024.0));
     AAC_RENAME_32(ff_mdct_init)(&ac->mdct_ld,    10, 1, 1.0 / RANGE15(512.0));
     AAC_RENAME_32(ff_mdct_init)(&ac->mdct_small,  8, 1, 1.0 / RANGE15(128.0));
     AAC_RENAME_32(ff_mdct_init)(&ac->mdct_ltp,   11, 0, RANGE15(-2.0));
 #if !USE_FIXED
-    ret = ff_mdct15_init(&ac->mdct480, 1, 5, -1.0f);
+    ret = ff_imdct15_init(&ac->mdct480, 5);
     if (ret < 0)
         return ret;
 #endif
+    // window initialization
+    AAC_RENAME(ff_kbd_window_init)(AAC_RENAME(ff_aac_kbd_long_1024), 4.0, 1024);
+    AAC_RENAME(ff_kbd_window_init)(AAC_RENAME(ff_aac_kbd_short_128), 6.0, 128);
+    AAC_RENAME(ff_init_ff_sine_windows)(10);
+    AAC_RENAME(ff_init_ff_sine_windows)( 9);
+    AAC_RENAME(ff_init_ff_sine_windows)( 7);
+
+    AAC_RENAME(cbrt_tableinit)();
 
     return 0;
 }
@@ -1817,7 +1779,7 @@ static int decode_spectrum_and_dequant(AACContext *ac, INTFLOAT coef[1024],
                                         v = -v;
                                     *icf++ = v;
 #else
-                                    *icf++ = ff_cbrt_tab[n] | (bits & 1U<<31);
+                                    *icf++ = cbrt_tab[n] | (bits & 1U<<31);
 #endif /* USE_FIXED */
                                     bits <<= 1;
                                 } else {
@@ -2927,11 +2889,6 @@ static int aac_decode_er_frame(AVCodecContext *avctx, void *data,
 
     spectral_to_sample(ac, samples);
 
-    if (!ac->frame->data[0] && samples) {
-        av_log(avctx, AV_LOG_ERROR, "no frame data found\n");
-        return AVERROR_INVALIDDATA;
-    }
-
     ac->frame->nb_samples = samples;
     ac->frame->sample_rate = avctx->sample_rate;
     *got_frame_ptr = 1;
@@ -2945,11 +2902,10 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
 {
     AACContext *ac = avctx->priv_data;
     ChannelElement *che = NULL, *che_prev = NULL;
-    enum RawDataBlockType elem_type, che_prev_type = TYPE_END;
+    enum RawDataBlockType elem_type, elem_type_prev = TYPE_END;
     int err, elem_id;
     int samples = 0, multiplier, audio_found = 0, pce_found = 0;
     int is_dmono, sce_count = 0;
-    int payload_alignment;
 
     ac->frame = data;
 
@@ -2972,7 +2928,6 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
     // This may lead to an undefined profile being signaled
     ac->avctx->profile = ac->oc[1].m4ac.object_type - 1;
 
-    payload_alignment = get_bits_count(gb);
     ac->tags_mapped = 0;
     // parse
     while ((elem_type = get_bits(gb, 3)) != TYPE_END) {
@@ -3027,8 +2982,7 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
             uint8_t layout_map[MAX_ELEM_ID*4][3];
             int tags;
             push_output_configuration(ac);
-            tags = decode_pce(avctx, &ac->oc[1].m4ac, layout_map, gb,
-                              payload_alignment);
+            tags = decode_pce(avctx, &ac->oc[1].m4ac, layout_map, gb);
             if (tags < 0) {
                 err = tags;
                 break;
@@ -3036,7 +2990,6 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
             if (pce_found) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Not evaluating a further program_config_element as this construct is dubious at best.\n");
-                pop_output_configuration(ac);
             } else {
                 err = output_configure(ac, layout_map, tags, OC_TRIAL_PCE, 1);
                 if (!err)
@@ -3055,7 +3008,7 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
                     goto fail;
             }
             while (elem_id > 0)
-                elem_id -= decode_extension_payload(ac, gb, elem_id, che_prev, che_prev_type);
+                elem_id -= decode_extension_payload(ac, gb, elem_id, che_prev, elem_type_prev);
             err = 0; /* FIXME */
             break;
 
@@ -3064,10 +3017,8 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
             break;
         }
 
-        if (elem_type < TYPE_DSE) {
-            che_prev      = che;
-            che_prev_type = elem_type;
-        }
+        che_prev       = che;
+        elem_type_prev = elem_type;
 
         if (err)
             goto fail;
@@ -3095,8 +3046,12 @@ static int aac_decode_frame_int(AVCodecContext *avctx, void *data,
         ac->oc[1].status = OC_LOCKED;
     }
 
-    if (multiplier)
-        avctx->internal->skip_samples_multiplier = 2;
+    if (multiplier) {
+        int side_size;
+        const uint8_t *side = av_packet_get_side_data(avpkt, AV_PKT_DATA_SKIP_SAMPLES, &side_size);
+        if (side && side_size>=4)
+            AV_WL32(side, 2*AV_RL32(side));
+    }
 
     if (!ac->frame->data[0] && samples) {
         av_log(avctx, AV_LOG_ERROR, "no frame data found\n");
@@ -3214,7 +3169,7 @@ static av_cold int aac_decode_close(AVCodecContext *avctx)
     ff_mdct_end(&ac->mdct_ld);
     ff_mdct_end(&ac->mdct_ltp);
 #if !USE_FIXED
-    ff_mdct15_uninit(&ac->mdct480);
+    ff_imdct15_uninit(&ac->mdct480);
 #endif
     av_freep(&ac->fdsp);
     return 0;
@@ -3259,4 +3214,16 @@ static const AVClass aac_decoder_class = {
     .item_name  = av_default_item_name,
     .option     = options,
     .version    = LIBAVUTIL_VERSION_INT,
+};
+
+static const AVProfile profiles[] = {
+    { FF_PROFILE_AAC_MAIN,  "Main"     },
+    { FF_PROFILE_AAC_LOW,   "LC"       },
+    { FF_PROFILE_AAC_SSR,   "SSR"      },
+    { FF_PROFILE_AAC_LTP,   "LTP"      },
+    { FF_PROFILE_AAC_HE,    "HE-AAC"   },
+    { FF_PROFILE_AAC_HE_V2, "HE-AACv2" },
+    { FF_PROFILE_AAC_LD,    "LD"       },
+    { FF_PROFILE_AAC_ELD,   "ELD"      },
+    { FF_PROFILE_UNKNOWN },
 };

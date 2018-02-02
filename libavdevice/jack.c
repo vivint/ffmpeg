@@ -218,7 +218,7 @@ static void free_pkt_fifo(AVFifoBuffer **fifo)
     AVPacket pkt;
     while (av_fifo_size(*fifo)) {
         av_fifo_generic_read(*fifo, &pkt, sizeof(pkt), NULL);
-        av_packet_unref(&pkt);
+        av_free_packet(&pkt);
     }
     av_fifo_freep(fifo);
 }
@@ -252,14 +252,14 @@ static int audio_read_header(AVFormatContext *context)
         return AVERROR(ENOMEM);
     }
 
-    stream->codecpar->codec_type   = AVMEDIA_TYPE_AUDIO;
+    stream->codec->codec_type   = AVMEDIA_TYPE_AUDIO;
 #if HAVE_BIGENDIAN
-    stream->codecpar->codec_id     = AV_CODEC_ID_PCM_F32BE;
+    stream->codec->codec_id     = AV_CODEC_ID_PCM_F32BE;
 #else
-    stream->codecpar->codec_id     = AV_CODEC_ID_PCM_F32LE;
+    stream->codec->codec_id     = AV_CODEC_ID_PCM_F32LE;
 #endif
-    stream->codecpar->sample_rate  = self->sample_rate;
-    stream->codecpar->channels     = self->nports;
+    stream->codec->sample_rate  = self->sample_rate;
+    stream->codec->channels     = self->nports;
 
     avpriv_set_pts_info(stream, 64, 1, 1000000);  /* 64 bits pts in us */
     return 0;

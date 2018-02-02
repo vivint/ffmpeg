@@ -129,8 +129,7 @@ char *av_timecode_make_smpte_tc_string(char *buf, uint32_t tcsmpte, int prevent_
 
 char *av_timecode_make_mpeg_tc_string(char *buf, uint32_t tc25bit)
 {
-    snprintf(buf, AV_TIMECODE_STR_SIZE,
-             "%02"PRIu32":%02"PRIu32":%02"PRIu32"%c%02"PRIu32,
+    snprintf(buf, AV_TIMECODE_STR_SIZE, "%02u:%02u:%02u%c%02u",
              tc25bit>>19 & 0x1f,              // 5-bit hours
              tc25bit>>13 & 0x3f,              // 6-bit minutes
              tc25bit>>6  & 0x3f,              // 6-bit seconds
@@ -142,9 +141,7 @@ char *av_timecode_make_mpeg_tc_string(char *buf, uint32_t tc25bit)
 static int check_fps(int fps)
 {
     int i;
-    static const int supported_fps[] = {
-        24, 25, 30, 48, 50, 60, 100, 120, 150,
-    };
+    static const int supported_fps[] = {24, 25, 30, 48, 50, 60};
 
     for (i = 0; i < FF_ARRAY_ELEMS(supported_fps); i++)
         if (fps == supported_fps[i])
@@ -154,7 +151,7 @@ static int check_fps(int fps)
 
 static int check_timecode(void *log_ctx, AVTimecode *tc)
 {
-    if ((int)tc->fps <= 0) {
+    if (tc->fps <= 0) {
         av_log(log_ctx, AV_LOG_ERROR, "Timecode frame rate must be specified\n");
         return AVERROR(EINVAL);
     }
@@ -163,8 +160,9 @@ static int check_timecode(void *log_ctx, AVTimecode *tc)
         return AVERROR(EINVAL);
     }
     if (check_fps(tc->fps) < 0) {
-        av_log(log_ctx, AV_LOG_WARNING, "Using non-standard frame rate %d/%d\n",
+        av_log(log_ctx, AV_LOG_ERROR, "Timecode frame rate %d/%d not supported\n",
                tc->rate.num, tc->rate.den);
+        return AVERROR_PATCHWELCOME;
     }
     return 0;
 }

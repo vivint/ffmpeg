@@ -37,3 +37,4 @@ typedef struct HQXDSPContext {
 void ff_hqxdsp_init(HQXDSPContext *c);
 
 #endif /* AVCODEC_HQXDSP_H */
+

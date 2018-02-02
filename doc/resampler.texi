@@ -66,8 +66,8 @@ Set rematrix volume. Default value is 1.0.
 
 @item rematrix_maxval
 Set maximum output value for rematrixing.
-This can be used to prevent clipping vs. preventing volume reduction.
-A value of 1.0 prevents clipping.
+This can be used to prevent clipping vs. preventing volumn reduction
+A value of 1.0 prevents cliping.
 
 @item flags, swr_flags
 Set flags used by the converter. Default value is 0.
@@ -94,13 +94,13 @@ select triangular dither
 @item triangular_hp
 select triangular dither with high pass
 @item lipshitz
-select Lipshitz noise shaping dither.
+select lipshitz noise shaping dither
 @item shibata
-select Shibata noise shaping dither.
+select shibata noise shaping dither
 @item low_shibata
-select low Shibata noise shaping dither.
+select low shibata noise shaping dither
 @item high_shibata
-select high Shibata noise shaping dither.
+select high shibata noise shaping dither
 @item f_weighted
 select f-weighted noise shaping dither
 @item modified_e_weighted
@@ -120,8 +120,8 @@ select the native SW Resampler; filter options precision and cheby are not
 applicable in this case.
 @item soxr
 select the SoX Resampler (where available); compensation, and filter options
-filter_size, phase_shift, exact_rational, filter_type & kaiser_beta, are not
-applicable in this case.
+filter_size, phase_shift, filter_type & kaiser_beta, are not applicable in this
+case.
 @end table
 
 @item filter_size
@@ -132,13 +132,7 @@ For swr only, set resampling phase shift, default value is 10, and must be in
 the interval [0,30].
 
 @item linear_interp
-Use linear interpolation when enabled (the default). Disable it if you want
-to preserve speed instead of quality when exact_rational fails.
-
-@item exact_rational
-For swr only, when enabled, try to use exact phase_count based on input and
-output sample rate. However, if it is larger than @code{1 << phase_shift},
-the phase_count will be @code{1 << phase_shift} as fallback. Default is enabled.
+Use Linear Interpolation if set to 1, default value is 0.
 
 @item cutoff
 Set cutoff frequency (swr: 6dB point; soxr: 0dB point) ratio; must be a float
@@ -220,13 +214,13 @@ It accepts the following values:
 @item cubic
 select cubic
 @item blackman_nuttall
-select Blackman Nuttall windowed sinc
+select Blackman Nuttall Windowed Sinc
 @item kaiser
-select Kaiser windowed sinc
+select Kaiser Windowed Sinc
 @end table
 
 @item kaiser_beta
-For swr only, set Kaiser window beta value. Must be a double float value in the
+For swr only, set Kaiser Window Beta value. Must be an integer in the
 interval [2,16], default value is 9.
 
 @item output_sample_bits

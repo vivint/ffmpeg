@@ -131,11 +131,11 @@ typedef struct SWFContext {
     int frame_rate;
     int tag;
     AVFifoBuffer *audio_fifo;
-    AVCodecParameters *audio_par, *video_par;
+    AVCodecContext *audio_enc, *video_enc;
     AVStream *video_st;
 #if CONFIG_ZLIB
-#define ZBUF_SIZE 4096
     AVIOContext *zpb;
+#define ZBUF_SIZE 4096
     uint8_t *zbuf_in;
     uint8_t *zbuf_out;
     z_stream zstream;

@@ -26,7 +26,6 @@
 #include "internal.h"
 
 #define HEADER_SIZE 4096
-#define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
 typedef struct RedSparkContext {
     int         samples_count;
@@ -39,13 +38,11 @@ static int redspark_probe(AVProbeData *p)
 
     /* Decrypt first 8 bytes of the header */
     data = AV_RB32(p->buf);
-    key  = data ^ 0x52656453;
-    data ^= key;
+    data = data ^ (key = data ^ 0x52656453);
     AV_WB32(header, data);
-    key = rol(key, 11);
+    key = (key << 11) | (key >> 21);
 
-    key += rol(key, 3);
-    data = AV_RB32(p->buf + 4) ^ key;
+    data = AV_RB32(p->buf + 4) ^ (((key << 3) | (key >> 29)) + key);
     AV_WB32(header + 4, data);
 
     if (AV_RB64(header) == AV_RB64("RedSpark"))
@@ -58,81 +55,92 @@ static int redspark_read_header(AVFormatContext *s)
 {
     AVIOContext *pb = s->pb;
     RedSparkContext *redspark = s->priv_data;
-    AVCodecParameters *par;
+    AVCodecContext *codec;
     GetByteContext gbc;
     int i, coef_off, ret = 0;
     uint32_t key, data;
-    uint8_t header[HEADER_SIZE];
+    uint8_t *header, *pbc;
     AVStream *st;
 
     st = avformat_new_stream(s, NULL);
     if (!st)
         return AVERROR(ENOMEM);
-    par = st->codecpar;
+    codec = st->codec;
+
+    header = av_malloc(HEADER_SIZE + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!header)
+        return AVERROR(ENOMEM);
+    pbc = header;
 
     /* Decrypt header */
     data = avio_rb32(pb);
-    key  = data ^ 0x52656453;
-    data ^= key;
-    AV_WB32(header, data);
-    key = rol(key, 11);
+    data = data ^ (key = data ^ 0x52656453);
+    bytestream_put_be32(&pbc, data);
+    key = (key << 11) | (key >> 21);
 
     for (i = 4; i < HEADER_SIZE; i += 4) {
-        key += rol(key, 3);
-        data = avio_rb32(pb) ^ key;
-        AV_WB32(header + i, data);
+        data = avio_rb32(pb) ^ (key = ((key << 3) | (key >> 29)) + key);
+        bytestream_put_be32(&pbc, data);
     }
 
-    par->codec_id    = AV_CODEC_ID_ADPCM_THP;
-    par->codec_type  = AVMEDIA_TYPE_AUDIO;
+    codec->codec_id    = AV_CODEC_ID_ADPCM_THP;
+    codec->codec_type  = AVMEDIA_TYPE_AUDIO;
 
     bytestream2_init(&gbc, header, HEADER_SIZE);
     bytestream2_seek(&gbc, 0x3c, SEEK_SET);
-    par->sample_rate = bytestream2_get_be32u(&gbc);
-    if (par->sample_rate <= 0 || par->sample_rate > 96000) {
-        av_log(s, AV_LOG_ERROR, "Invalid sample rate: %d\n", par->sample_rate);
-        return AVERROR_INVALIDDATA;
+    codec->sample_rate = bytestream2_get_be32u(&gbc);
+    if (codec->sample_rate <= 0 || codec->sample_rate > 96000) {
+        av_log(s, AV_LOG_ERROR, "Invalid sample rate: %d\n", codec->sample_rate);
+        ret = AVERROR_INVALIDDATA;
+        goto fail;
     }
 
     st->duration = bytestream2_get_be32u(&gbc) * 14;
     redspark->samples_count = 0;
     bytestream2_skipu(&gbc, 10);
-    par->channels = bytestream2_get_byteu(&gbc);
-    if (!par->channels) {
-        return AVERROR_INVALIDDATA;
+    codec->channels = bytestream2_get_byteu(&gbc);
+    if (!codec->channels) {
+        ret = AVERROR_INVALIDDATA;
+        goto fail;
     }
 
-    coef_off = 0x54 + par->channels * 8;
+    coef_off = 0x54 + codec->channels * 8;
     if (bytestream2_get_byteu(&gbc)) // Loop flag
         coef_off += 16;
 
-    if (coef_off + par->channels * (32 + 14) > HEADER_SIZE) {
-        return AVERROR_INVALIDDATA;
+    if (coef_off + codec->channels * (32 + 14) > HEADER_SIZE) {
+        ret = AVERROR_INVALIDDATA;
+        goto fail;
     }
 
-    if (ff_alloc_extradata(par, 32 * par->channels)) {
-        return AVERROR_INVALIDDATA;
+    if (ff_alloc_extradata(codec, 32 * codec->channels)) {
+        ret = AVERROR(ENOMEM);
+        goto fail;
     }
 
     /* Get the ADPCM table */
     bytestream2_seek(&gbc, coef_off, SEEK_SET);
-    for (i = 0; i < par->channels; i++) {
-        if (bytestream2_get_bufferu(&gbc, par->extradata + i * 32, 32) != 32) {
-            return AVERROR_INVALIDDATA;
+    for (i = 0; i < codec->channels; i++) {
+        if (bytestream2_get_bufferu(&gbc, codec->extradata + i * 32, 32) != 32) {
+            ret = AVERROR_INVALIDDATA;
+            goto fail;
         }
         bytestream2_skipu(&gbc, 14);
     }
 
-    avpriv_set_pts_info(st, 64, 1, par->sample_rate);
+    avpriv_set_pts_info(st, 64, 1, codec->sample_rate);
+
+fail:
+    av_free(header);
 
     return ret;
 }
 
 static int redspark_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
-    AVCodecParameters *par = s->streams[0]->codecpar;
+    AVCodecContext *codec = s->streams[0]->codec;
     RedSparkContext *redspark = s->priv_data;
-    uint32_t size = 8 * par->channels;
+    uint32_t size = 8 * codec->channels;
     int ret;
 
     if (avio_feof(s->pb) || redspark->samples_count == s->streams[0]->duration)
@@ -140,7 +148,7 @@ static int redspark_read_packet(AVFormatContext *s, AVPacket *pkt)
 
     ret = av_get_packet(s->pb, pkt, size);
     if (ret != size) {
-        av_packet_unref(pkt);
+        av_free_packet(pkt);
         return AVERROR(EIO);
     }
 

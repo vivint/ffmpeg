@@ -1,4 +1,5 @@
 /*
+ *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -37,7 +38,7 @@ extern const AVClass ffurl_context_class;
 
 typedef struct URLContext {
     const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
-    const struct URLProtocol *prot;
+    struct URLProtocol *prot;
     void *priv_data;
     char *filename;             /**< specified URL */
     int flags;
@@ -46,8 +47,6 @@ typedef struct URLContext {
     int is_connected;
     AVIOInterruptCB interrupt_callback;
     int64_t rw_timeout;         /**< maximum time to wait for (network) read/write operation completion, in mcs */
-    const char *protocol_whitelist;
-    const char *protocol_blacklist;
 } URLContext;
 
 typedef struct URLProtocol {
@@ -78,13 +77,13 @@ typedef struct URLProtocol {
     int     (*url_write)(URLContext *h, const unsigned char *buf, int size);
     int64_t (*url_seek)( URLContext *h, int64_t pos, int whence);
     int     (*url_close)(URLContext *h);
+    struct URLProtocol *next;
     int (*url_read_pause)(URLContext *h, int pause);
     int64_t (*url_read_seek)(URLContext *h, int stream_index,
                              int64_t timestamp, int flags);
     int (*url_get_file_handle)(URLContext *h);
     int (*url_get_multi_file_handle)(URLContext *h, int **handles,
                                      int *numhandles);
-    int (*url_get_short_seek)(URLContext *h);
     int (*url_shutdown)(URLContext *h, int flags);
     int priv_data_size;
     const AVClass *priv_data_class;
@@ -95,7 +94,6 @@ typedef struct URLProtocol {
     int (*url_close_dir)(URLContext *h);
     int (*url_delete)(URLContext *h);
     int (*url_move)(URLContext *h_src, URLContext *h_dst);
-    const char *default_whitelist;
 } URLProtocol;
 
 /**
@@ -137,16 +135,9 @@ int ffurl_connect(URLContext *uc, AVDictionary **options);
  * @param options  A dictionary filled with protocol-private options. On return
  * this parameter will be destroyed and replaced with a dict containing options
  * that were not found. May be NULL.
- * @param parent An enclosing URLContext, whose generic options should
- *               be applied to this URLContext as well.
  * @return >= 0 in case of success, a negative value corresponding to an
  * AVERROR code in case of failure
  */
-int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
-               const AVIOInterruptCB *int_cb, AVDictionary **options,
-               const char *whitelist, const char* blacklist,
-               URLContext *parent);
-
 int ffurl_open(URLContext **puc, const char *filename, int flags,
                const AVIOInterruptCB *int_cb, AVDictionary **options);
 
@@ -250,13 +241,6 @@ int ffurl_get_file_handle(URLContext *h);
 int ffurl_get_multi_file_handle(URLContext *h, int **handles, int *numhandles);
 
 /**
- * Return the current short seek threshold value for this URL.
- *
- * @return threshold (>0) on success or <=0 on error.
- */
-int ffurl_get_short_seek(URLContext *h);
-
-/**
  * Signal the URLContext that we are done reading or writing the stream.
  *
  * @param h pointer to the resource
@@ -269,10 +253,22 @@ int ffurl_get_short_seek(URLContext *h);
 int ffurl_shutdown(URLContext *h, int flags);
 
 /**
- * Check if the user has requested to interrupt a blocking function
+ * Register the URLProtocol protocol.
+ */
+int ffurl_register_protocol(URLProtocol *protocol);
+
+/**
+ * Check if the user has requested to interrup a blocking function
  * associated with cb.
  */
 int ff_check_interrupt(AVIOInterruptCB *cb);
+
+/**
+ * Iterate over all available protocols.
+ *
+ * @param prev result of the previous call to this functions or NULL.
+ */
+URLProtocol *ffurl_protocol_next(const URLProtocol *prev);
 
 /* udp.c */
 int ff_udp_set_remote_url(URLContext *h, const char *uri);
@@ -321,22 +317,5 @@ void ff_make_absolute_url(char *buf, int size, const char *base,
  */
 AVIODirEntry *ff_alloc_dir_entry(void);
 
-const AVClass *ff_urlcontext_child_class_next(const AVClass *prev);
-
-/**
- * Construct a list of protocols matching a given whitelist and/or blacklist.
- *
- * @param whitelist a comma-separated list of allowed protocol names or NULL. If
- *                  this is a non-empty string, only protocols in this list will
- *                  be included.
- * @param blacklist a comma-separated list of forbidden protocol names or NULL.
- *                  If this is a non-empty string, all protocols in this list
- *                  will be excluded.
- *
- * @return a NULL-terminated array of matching protocols. The array must be
- * freed by the caller.
- */
-const URLProtocol **ffurl_get_protocols(const char *whitelist,
-                                        const char *blacklist);
 
 #endif /* AVFORMAT_URL_H */

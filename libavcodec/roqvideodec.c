@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003 The FFmpeg project
+ * Copyright (c) 2003 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -26,8 +26,6 @@
  */
 
 #include "libavutil/avassert.h"
-#include "libavutil/imgutils.h"
-
 #include "avcodec.h"
 #include "bytestream.h"
 #include "internal.h"
@@ -175,7 +173,8 @@ static av_cold int roq_decode_init(AVCodecContext *avctx)
     s->avctx = avctx;
 
     if (avctx->width % 16 || avctx->height % 16) {
-        avpriv_request_sample(avctx, "Dimensions not being a multiple of 16");
+        av_log(avctx, AV_LOG_ERROR,
+               "Dimensions must be a multiple of 16\n");
         return AVERROR_PATCHWELCOME;
     }
 
@@ -203,17 +202,15 @@ static int roq_decode_frame(AVCodecContext *avctx,
     const uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     RoqContext *s = avctx->priv_data;
-    int copy = !s->current_frame->data[0] && s->last_frame->data[0];
+    int copy= !s->current_frame->data[0];
     int ret;
 
     if ((ret = ff_reget_buffer(avctx, s->current_frame)) < 0)
         return ret;
 
-    if (copy) {
-        ret = av_frame_copy(s->current_frame, s->last_frame);
-        if (ret < 0)
-            return ret;
-    }
+    if(copy)
+        av_picture_copy((AVPicture*)s->current_frame, (AVPicture*)s->last_frame,
+                        avctx->pix_fmt, avctx->width, avctx->height);
 
     bytestream2_init(&s->gb, buf, buf_size);
     roqvideo_decode_frame(s);

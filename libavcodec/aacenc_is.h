@@ -39,7 +39,6 @@ struct AACISError {
     float error; /* fabs(dist1 - dist2)  */
     float dist1; /* From original coeffs */
     float dist2; /* From IS'd coeffs     */
-    float ener01;
 };
 
 struct AACISError ff_aac_is_encoding_err(AACEncContext *s, ChannelElement *cpe,

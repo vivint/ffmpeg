@@ -28,7 +28,6 @@
 #define APE_TAG_PREAMBLE        "APETAGEX"
 #define APE_TAG_VERSION         2000
 #define APE_TAG_FOOTER_BYTES    32
-#define APE_TAG_HEADER_BYTES    32
 
 /**
  * Read and parse an APE tag

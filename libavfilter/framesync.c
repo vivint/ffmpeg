@@ -18,9 +18,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#define FF_INTERNAL_FIELDS 1
-#include "framequeue.h"
-
 #include "libavutil/avassert.h"
 #include "avfilter.h"
 #include "bufferqueue.h"
@@ -317,7 +314,7 @@ int ff_framesync_filter_frame(FFFrameSync *fs, AVFilterLink *inlink,
 int ff_framesync_request_frame(FFFrameSync *fs, AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
-    int input, ret, i;
+    int input, ret;
 
     if ((ret = ff_framesync_process_frame(fs, 0)) < 0)
         return ret;
@@ -325,12 +322,8 @@ int ff_framesync_request_frame(FFFrameSync *fs, AVFilterLink *outlink)
         return 0;
     if (fs->eof)
         return AVERROR_EOF;
+    outlink->flags |= FF_LINK_FLAG_REQUEST_LOOP;
     input = fs->in_request;
-    /* Detect status change early */
-    for (i = 0; i < fs->nb_in; i++)
-        if (!ff_framequeue_queued_frames(&ctx->inputs[i]->fifo) &&
-            ctx->inputs[i]->status_in && !ctx->inputs[i]->status_out)
-            input = i;
     ret = ff_request_frame(ctx->inputs[input]);
     if (ret == AVERROR_EOF) {
         if ((ret = ff_framesync_add_frame(fs, input, NULL)) < 0)

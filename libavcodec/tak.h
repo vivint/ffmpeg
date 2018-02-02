@@ -29,8 +29,9 @@
 
 #include <stdint.h>
 
-#include "avcodec.h"
+#define BITSTREAM_READER_LE
 #include "get_bits.h"
+#include "avcodec.h"
 
 #define TAK_FORMAT_DATA_TYPE_BITS               3
 #define TAK_FORMAT_SAMPLE_RATE_BITS            18

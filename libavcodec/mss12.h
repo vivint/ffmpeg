@@ -77,12 +77,12 @@ typedef struct MSS12Context {
     uint32_t       pal[256];
     uint8_t        *pal_pic;
     uint8_t        *last_pal_pic;
-    ptrdiff_t      pal_stride;
+    int            pal_stride;
     uint8_t        *mask;
-    ptrdiff_t      mask_stride;
+    int            mask_stride;
     uint8_t        *rgb_pic;
     uint8_t        *last_rgb_pic;
-    ptrdiff_t      rgb_stride;
+    int            rgb_stride;
     int            free_colours;
     int            keyframe;
     int            mvX, mvY;

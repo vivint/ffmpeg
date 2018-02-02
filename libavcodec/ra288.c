@@ -1,6 +1,6 @@
 /*
  * RealAudio 2.0 (28.8K)
- * Copyright (c) 2003 The FFmpeg project
+ * Copyright (c) 2003 The FFmpeg Project
  *
  * This file is part of FFmpeg.
  *
@@ -22,14 +22,13 @@
 #include "libavutil/channel_layout.h"
 #include "libavutil/float_dsp.h"
 #include "libavutil/internal.h"
-
-#define BITSTREAM_READER_LE
 #include "avcodec.h"
-#include "celp_filters.h"
-#include "get_bits.h"
 #include "internal.h"
-#include "lpc.h"
+#define BITSTREAM_READER_LE
+#include "get_bits.h"
 #include "ra288.h"
+#include "lpc.h"
+#include "celp_filters.h"
 
 #define MAX_BACKWARD_FILTER_ORDER  36
 #define MAX_BACKWARD_FILTER_LEN    40

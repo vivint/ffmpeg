@@ -16,12 +16,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "config.h"
-
-#if HAVE_UTGETOSTYPEFROMSTRING
 #include <CoreServices/CoreServices.h>
-#endif
 
+#include "config.h"
 #include "libavcodec/avcodec.h"
 #if CONFIG_VDA
 #  include "libavcodec/vda.h"
@@ -48,6 +45,7 @@ static int videotoolbox_retrieve_data(AVCodecContext *s, AVFrame *frame)
     uint8_t *data[4] = { 0 };
     int linesize[4] = { 0 };
     int planes, ret, i;
+    char codec_str[32];
 
     av_frame_unref(vt->tmp_frame);
 
@@ -59,9 +57,9 @@ static int videotoolbox_retrieve_data(AVCodecContext *s, AVFrame *frame)
     case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: vt->tmp_frame->format = AV_PIX_FMT_NV12; break;
 #endif
     default:
+        av_get_codec_tag_string(codec_str, sizeof(codec_str), s->codec_tag);
         av_log(NULL, AV_LOG_ERROR,
-               "%s: Unsupported pixel format: %s\n",
-               av_fourcc2str(s->codec_tag), videotoolbox_pixfmt);
+               "%s: Unsupported pixel format: %s\n", codec_str, videotoolbox_pixfmt);
         return AVERROR(ENOSYS);
     }
 
@@ -156,13 +154,7 @@ int videotoolbox_init(AVCodecContext *s)
             CFStringRef pixfmt_str = CFStringCreateWithCString(kCFAllocatorDefault,
                                                                videotoolbox_pixfmt,
                                                                kCFStringEncodingUTF8);
-#if HAVE_UTGETOSTYPEFROMSTRING
             vtctx->cv_pix_fmt_type = UTGetOSTypeFromString(pixfmt_str);
-#else
-            av_log(s, loglevel, "UTGetOSTypeFromString() is not available "
-                   "on this platform, %s pixel format can not be honored from "
-                   "the command line\n", videotoolbox_pixfmt);
-#endif
             ret = av_videotoolbox_default_init2(s, vtctx);
             CFRelease(pixfmt_str);
         }
@@ -176,13 +168,7 @@ int videotoolbox_init(AVCodecContext *s)
             CFStringRef pixfmt_str = CFStringCreateWithCString(kCFAllocatorDefault,
                                                                videotoolbox_pixfmt,
                                                                kCFStringEncodingUTF8);
-#if HAVE_UTGETOSTYPEFROMSTRING
             vdactx->cv_pix_fmt_type = UTGetOSTypeFromString(pixfmt_str);
-#else
-            av_log(s, loglevel, "UTGetOSTypeFromString() is not available "
-                   "on this platform, %s pixel format can not be honored from "
-                   "the command line\n", videotoolbox_pixfmt);
-#endif
             ret = av_vda_default_init2(s, vdactx);
             CFRelease(pixfmt_str);
         }

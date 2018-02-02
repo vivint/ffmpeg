@@ -19,7 +19,7 @@
  */
 
 #include "golomb.h"
-#include "hevc_ps.h"
+#include "hevc.h"
 #include "put_bits.h"
 
 static void write_ptl_layer(PutBitContext *pb, PTLCommon *ptl)
@@ -90,10 +90,9 @@ int ff_hevc_encode_nal_vps(HEVCVPS *vps, unsigned int id,
     put_bits(&pb, 6, vps->vps_max_layer_id);
     set_ue_golomb(&pb, vps->vps_num_layer_sets - 1);
 
-    if (vps->vps_num_layer_sets > 1) {
-        avpriv_report_missing_feature(NULL, "Writing layer_id_included_flag");
+    // writing layer_id_included_flag not supported
+    if (vps->vps_num_layer_sets > 1)
         return AVERROR_PATCHWELCOME;
-    }
 
     put_bits(&pb, 1, vps->vps_timing_info_present_flag);
     if (vps->vps_timing_info_present_flag) {
@@ -103,10 +102,9 @@ int ff_hevc_encode_nal_vps(HEVCVPS *vps, unsigned int id,
         if (vps->vps_poc_proportional_to_timing_flag)
             set_ue_golomb(&pb, vps->vps_num_ticks_poc_diff_one - 1);
 
-        if (vps->vps_num_hrd_parameters) {
-            avpriv_report_missing_feature(NULL, "Writing HRD parameters");
+        // writing HRD parameters not supported
+        if (vps->vps_num_hrd_parameters)
             return AVERROR_PATCHWELCOME;
-        }
     }
 
     put_bits(&pb, 1, 0);    // extension flag

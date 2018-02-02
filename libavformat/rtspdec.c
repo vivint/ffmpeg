@@ -151,7 +151,7 @@ static inline int rtsp_read_request(AVFormatContext *s,
             return ret;
         if (rbuflen > 1) {
             av_log(s, AV_LOG_TRACE, "Parsing[%d]: %s\n", rbuflen, rbuf);
-            ff_rtsp_parse_line(s, request, rbuf, rt, method);
+            ff_rtsp_parse_line(request, rbuf, rt, method);
         }
     } while (rbuflen > 0);
     if (request->seq != rt->seq + 1) {
@@ -294,9 +294,8 @@ static int rtsp_read_setup(AVFormatContext *s, char* host, char *controlurl)
             av_dict_set(&opts, "buffer_size", buf, 0);
             ff_url_join(url, sizeof(url), "rtp", NULL, host, localport, NULL);
             av_log(s, AV_LOG_TRACE, "Opening: %s", url);
-            ret = ffurl_open_whitelist(&rtsp_st->rtp_handle, url, AVIO_FLAG_READ_WRITE,
-                                       &s->interrupt_callback, &opts,
-                                       s->protocol_whitelist, s->protocol_blacklist, NULL);
+            ret = ffurl_open(&rtsp_st->rtp_handle, url, AVIO_FLAG_READ_WRITE,
+                             &s->interrupt_callback, &opts);
             av_dict_free(&opts);
             if (ret)
                 localport += 2;
@@ -652,7 +651,6 @@ static int rtsp_listen(AVFormatContext *s)
                 port, "%s", path);
 
     if (!strcmp(proto, "rtsps") || strstr(host, "vivint") != NULL) {
-        av_log(s, AV_LOG_ERROR, "Using TLS");
         lower_proto  = "tls";
         default_port = RTSPS_DEFAULT_PORT;
     }
@@ -664,9 +662,8 @@ static int rtsp_listen(AVFormatContext *s)
     ff_url_join(tcpname, sizeof(tcpname), lower_proto, NULL, host, port,
                 "?listen&listen_timeout=%d", rt->initial_timeout * 1000);
 
-    if (ret = ffurl_open_whitelist(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
-                                   &s->interrupt_callback, NULL,
-                                   s->protocol_whitelist, s->protocol_blacklist, NULL)) {
+    if (ret = ffurl_open(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
+                         &s->interrupt_callback, NULL)) {
         av_log(s, AV_LOG_ERROR, "Unable to open RTSP for listening\n");
         return ret;
     }
@@ -699,6 +696,7 @@ static int rtsp_listen(AVFormatContext *s)
             return AVERROR_INVALIDDATA;
         }
     }
+    return 0;
 }
 
 static int rtsp_probe(AVProbeData *p)
@@ -812,6 +810,20 @@ static int resetup_tcp(AVFormatContext *s)
                                       rt->real_challenge);
 }
 
+static int rtsp_set_parameter(AVFormatContext *s, const char *key, const char *value)
+{
+    RTSPState *rt = s->priv_data;
+    int ret;
+    char cmd[1024];
+
+    snprintf(cmd, sizeof(cmd),
+                             "%s:%s\r\n",
+                             key, value);
+
+    av_log(s, AV_LOG_DEBUG, "Sending SET_PARAMETER with key:value %s:%s\n", key, value);
+    return rtsp_send_cmd_with_content_async(s, "SET_PARAMETER", rt->control_uri, NULL, cmd, strlen(cmd));
+}
+
 static int rtsp_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     RTSPState *rt = s->priv_data;
@@ -910,13 +922,13 @@ retry:
         /* send dummy request to keep TCP connection alive */
         if ((av_gettime_relative() - rt->last_cmd_time) / 1000000 >= rt->timeout / 2 ||
             rt->auth_state.stale) {
-//            if (rt->server_type == RTSP_SERVER_WMS ||
-//                (rt->server_type != RTSP_SERVER_REAL &&
-//                 rt->get_parameter_supported)) {
+            if (rt->server_type == RTSP_SERVER_WMS ||
+                (rt->server_type != RTSP_SERVER_REAL &&
+                 rt->get_parameter_supported)) {
                 ff_rtsp_send_cmd_async(s, "GET_PARAMETER", rt->control_uri, NULL);
-//            } else {
-//                ff_rtsp_send_cmd_async(s, "OPTIONS", rt->control_uri, NULL);
-//            }
+            } else {
+                ff_rtsp_send_cmd_async(s, "OPTIONS", rt->control_uri, NULL);
+            }
             /* The stale flag should be reset when creating the auth response in
              * ff_rtsp_send_cmd_async, but reset it here just in case we never
              * called the auth code (if we didn't have any credentials set). */
@@ -974,4 +986,5 @@ AVInputFormat ff_rtsp_demuxer = {
     .read_play      = rtsp_read_play,
     .read_pause     = rtsp_read_pause,
     .priv_class     = &rtsp_demuxer_class,
+    .set_parameter  = rtsp_set_parameter,
 };

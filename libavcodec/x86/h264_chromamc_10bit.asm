@@ -57,11 +57,12 @@ SECTION .text
 %endmacro
 
 ;-----------------------------------------------------------------------------
-; void ff_put/avg_h264_chroma_mc8(pixel *dst, pixel *src, ptrdiff_t stride,
-;                                 int h, int mx, int my)
+; void ff_put/avg_h264_chroma_mc8(pixel *dst, pixel *src, int stride, int h,
+;                                 int mx, int my)
 ;-----------------------------------------------------------------------------
 %macro CHROMA_MC8 1
 cglobal %1_h264_chroma_mc8_10, 6,7,8
+    movsxdifnidn  r2, r2d
     mov          r6d, r5d
     or           r6d, r4d
     jne .at_least_one_non_zero
@@ -148,8 +149,8 @@ cglobal %1_h264_chroma_mc8_10, 6,7,8
 %endmacro
 
 ;-----------------------------------------------------------------------------
-; void ff_put/avg_h264_chroma_mc4(pixel *dst, pixel *src, ptrdiff_t stride,
-;                                 int h, int mx, int my)
+; void ff_put/avg_h264_chroma_mc4(pixel *dst, pixel *src, int stride, int h,
+;                                 int mx, int my)
 ;-----------------------------------------------------------------------------
 ;TODO: xmm mc4
 %macro MC4_OP 2
@@ -173,6 +174,7 @@ cglobal %1_h264_chroma_mc8_10, 6,7,8
 
 %macro CHROMA_MC4 1
 cglobal %1_h264_chroma_mc4_10, 6,6,7
+    movsxdifnidn  r2, r2d
     movd          m2, r4m         ; x
     movd          m3, r5m         ; y
     mova          m4, [pw_8]
@@ -198,11 +200,12 @@ cglobal %1_h264_chroma_mc4_10, 6,6,7
 %endmacro
 
 ;-----------------------------------------------------------------------------
-; void ff_put/avg_h264_chroma_mc2(pixel *dst, pixel *src, ptrdiff_t stride,
-;                                 int h, int mx, int my)
+; void ff_put/avg_h264_chroma_mc2(pixel *dst, pixel *src, int stride, int h,
+;                                 int mx, int my)
 ;-----------------------------------------------------------------------------
 %macro CHROMA_MC2 1
 cglobal %1_h264_chroma_mc2_10, 6,7
+    movsxdifnidn  r2, r2d
     mov          r6d, r4d
     shl          r4d, 16
     sub          r4d, r6d
