@@ -31,6 +31,8 @@
 #endif
 #include "url.h"
 
+static URLContext *cachedURLContext = NULL;
+
 /** @name Logging context. */
 /*@{*/
 static const char *urlcontext_to_name(void *ptr)
@@ -311,6 +313,16 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
                          const char *whitelist, const char* blacklist,
                          URLContext *parent)
 {
+
+    if (cachedURLContext != NULL) {
+        av_log(s, AV_LOG_ERROR, "We have a cached URLContext %s", filename);
+        if (cachedURLContext.filename == filename) {
+            av_log(s, AV_LOG_ERROR, "The cached URLContext matches this one %s", filename);
+            *puc = cachedURLContext;
+            return;
+        }
+    }
+    
     AVDictionary *tmp_opts = NULL;
     AVDictionaryEntry *e;
     int ret = ffurl_alloc(puc, filename, flags, int_cb);
@@ -345,9 +357,12 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
         goto fail;
 
     ret = ffurl_connect(*puc, options);
-
-    if (!ret)
+    
+    if (!ret) {
+        av_log(s, AV_LOG_ERROR, "Caching URLContext: %s", filename);
+        cachedURLContext = *puc;
         return 0;
+    }
 fail:
     ffurl_close(*puc);
     *puc = NULL;
